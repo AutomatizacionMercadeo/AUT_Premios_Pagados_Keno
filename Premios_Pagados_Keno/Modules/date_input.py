@@ -1,6 +1,6 @@
 import msvcrt
 import time
-from datetime import date
+from datetime import date, timedelta
 
 
 MONTHS = {
@@ -99,6 +99,10 @@ def formatear_fecha_para_input(report_date: date) -> str:
     return f"{report_date.day} de {month_name} de {report_date.year}"
 
 
+def obtener_fecha_maxima_reporte() -> date:
+    return date.today() - timedelta(days=1)
+
+
 def obtener_campos_faltantes(
     day_value: str,
     month_value: str,
@@ -159,9 +163,38 @@ def preguntar_fecha_reporte() -> tuple[date, str] | None:
             year = int(year_value)
             month = MONTHS[month_value]
             report_date = date(year, month, day)
+            max_report_date = obtener_fecha_maxima_reporte()
+
+            if report_date > max_report_date:
+                print(
+                    "La fecha ingresada corresponde a un dia que todavia no ha pasado. "
+                    f"Ingresa una fecha igual o menor a {formatear_fecha_para_input(max_report_date)}."
+                )
+                continue
 
             return report_date, formatear_fecha_para_input(report_date)
         except KeyError:
             print("Mes invalido. Usa un numero del 1 al 12 o el nombre del mes.")
         except ValueError:
             print("Fecha invalida. Revisa dia, mes y anio.")
+
+
+def preguntar_reprocesamiento() -> bool:
+    while True:
+        answer = input_con_timeout(
+            "Deseas procesar otra fecha? (si/no): ",
+            INPUT_TIMEOUT_SECONDS,
+        )
+
+        if answer is None:
+            print("No se recibio respuesta. Finalizando ejecucion.")
+            return False
+
+        normalized_answer = answer.strip().casefold()
+
+        if normalized_answer in ("s", "si", "y", "yes"):
+            return True
+        if normalized_answer in ("n", "no"):
+            return False
+
+        print("Respuesta invalida. Escribe 'si' para reprocesar o 'no' para terminar.")

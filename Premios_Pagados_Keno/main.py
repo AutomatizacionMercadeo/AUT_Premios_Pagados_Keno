@@ -1,5 +1,7 @@
-from pathlib import Path
+﻿from pathlib import Path
 
+from Modules.date_input import preguntar_reprocesamiento
+from web.navigation import navigation
 from dotenv import load_dotenv
 
 
@@ -8,9 +10,11 @@ load_dotenv(PROJECT_DIR / ".env")
 
 
 def main() -> None:
-    from web.navigation import navigation
+    while True:
+        navigation()
 
-    navigation()
+        if not preguntar_reprocesamiento():
+            break
 
 
 if __name__ == "__main__":

@@ -21,6 +21,9 @@ El flujo usa Playwright para navegar la interfaz web, Paramiko para la conexion 
 13. Crea la ruta remota si no existe.
 14. Sube el archivo al SFTP.
 15. Cierra el navegador.
+16. Pregunta si se desea procesar otra fecha.
+17. Si la respuesta es `si`, vuelve a iniciar desde el input de fecha.
+18. Si la respuesta es `no` o no hay respuesta en 10 segundos, termina la ejecucion.
 
 ## Estructura Del Proyecto
 
@@ -81,6 +84,8 @@ Gestiona la fecha del reporte ingresada por terminal:
 - Si pasan 10 segundos sin input en algun campo, usa el flujo por defecto `Ayer`.
 - Si el usuario deja los tres campos vacios, usa `Ayer`.
 - Si solo llena uno o dos campos, muestra cuales datos faltan.
+- Valida que la fecha ingresada sea igual o anterior a la fecha de ayer.
+- Al final del procesamiento pregunta si se desea ejecutar otra fecha.
 
 `Modules/reports_folder.py`
 
@@ -222,6 +227,48 @@ Ejemplo:
 Faltan datos por ingresar: mes, anio. Completa dia, mes y anio, o deja los tres campos vacios para usar 'Ayer'.
 ```
 
+### Fechas Futuras O Del Dia Actual
+
+La fecha ingresada debe corresponder a un dia que ya haya pasado. El programa compara la fecha ingresada contra la fecha de ayer.
+
+Si la fecha ingresada es mayor a ayer, muestra una advertencia y vuelve a pedir los datos.
+
+Ejemplo de advertencia:
+
+```text
+La fecha ingresada corresponde a un dia que todavia no ha pasado. Ingresa una fecha igual o menor a 17 de junio de 2026.
+```
+
+## Reprocesamiento
+
+Al finalizar una ejecucion completa, el programa pregunta:
+
+```text
+Deseas procesar otra fecha? (si/no):
+```
+
+Si el usuario responde `si`, el flujo vuelve a empezar desde el input de fecha.
+
+Si responde `no`, termina la ejecucion.
+
+Si no responde en 10 segundos, tambien termina la ejecucion.
+
+Respuestas aceptadas para continuar:
+
+```text
+s
+si
+y
+yes
+```
+
+Respuestas aceptadas para terminar:
+
+```text
+n
+no
+```
+
 ## Nombre Del Archivo
 
 El CSV se guarda con el formato:
@@ -317,8 +364,10 @@ El proyecto maneja estos casos:
 - Si no existe `WEB_URL`, lanza un error claro.
 - Si la fecha del usuario esta incompleta, informa campos faltantes.
 - Si la fecha es invalida, solicita corregirla.
+- Si la fecha ingresada es mayor a ayer, solicita otra fecha.
 - Si no se descarga el archivo dentro del timeout, informa fallo de descarga.
 - Si faltan credenciales SFTP, lanza un error claro.
+- Si no hay respuesta en la pregunta de reprocesamiento, finaliza la ejecucion.
 
 ## Consideraciones
 
