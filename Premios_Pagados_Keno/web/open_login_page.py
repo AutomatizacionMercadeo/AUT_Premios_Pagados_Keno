@@ -14,13 +14,15 @@ def open_login_page(manager: BrowserManager):
         page = manager.open()
 
         try:
+            print("[INFO] Cargando pagina de login.")
             page.goto(web_url, wait_until="domcontentloaded", timeout=10000)
             page.get_by_text("Inicia sesión en Metabase").wait_for(
                 state="visible",
                 timeout=10000,
             )
+            print("[INFO] Login disponible.")
             return page
         except PlaywrightTimeoutError:
-            print("No cargo el browser correctamente. Cerrando y abriendo nuevamente...")
+            print("[WARN] No cargo Metabase. Reintentando...")
             manager.close()
             time.sleep(3)

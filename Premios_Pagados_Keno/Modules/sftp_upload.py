@@ -58,12 +58,16 @@ def subir_reporte_premio_pagado(local_file_path: str) -> None:
     transport = paramiko.Transport((host, port))
 
     try:
+        print("[INFO] Conectando al SFTP.")
         transport.connect(username=username, password=password)
 
         with paramiko.SFTPClient.from_transport(transport) as sftp:
+            print(f"[INFO] Verificando ruta remota: {remote_dir}")
             asegurar_directorio_sftp(sftp, remote_dir)
+            print("[INFO] Enviando archivo al SFTP.")
             sftp.put(local_file_path, remote_file_path)
 
-            print(f"Archivo subido exitosamente al SFTP: {remote_file_path}")
+            print(f"[INFO] Archivo subido al SFTP: {remote_file_path}")
     finally:
+        print("[INFO] Cerrando conexion SFTP.")
         transport.close()

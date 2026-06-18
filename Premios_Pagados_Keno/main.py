@@ -11,10 +11,14 @@ load_dotenv(PROJECT_DIR / ".env")
 
 def main() -> None:
     while True:
+        print("[INFO] Ejecutando flujo principal.")
         navigation()
 
         if not preguntar_reprocesamiento():
+            print("[INFO] Ejecucion finalizada.")
             break
+
+        print("[INFO] Reiniciando procesamiento.")
 
 
 if __name__ == "__main__":

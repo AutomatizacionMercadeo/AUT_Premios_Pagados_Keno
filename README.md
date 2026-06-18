@@ -369,6 +369,18 @@ El proyecto maneja estos casos:
 - Si faltan credenciales SFTP, lanza un error claro.
 - Si no hay respuesta en la pregunta de reprocesamiento, finaliza la ejecucion.
 
+## Logs En Terminal
+
+El flujo imprime mensajes cortos para seguir el avance del proceso:
+
+```text
+[INFO] Accion normal del proceso.
+[WARN] Advertencia o reintento.
+[ERROR] Error que requiere atencion.
+```
+
+Estos mensajes ayudan a identificar en que etapa esta la ejecucion: login, filtros, descarga, subida SFTP o cierre.
+
 ## Consideraciones
 
 - El input con timeout usa `msvcrt`, por lo que esta implementacion esta pensada para Windows.
