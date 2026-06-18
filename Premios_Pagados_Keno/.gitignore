@@ -1,0 +1,7 @@
+*.env
+Fuji/.env
+/Fuji/.env
+.env
+__pycache__/
+*.pyc
+Reports/
