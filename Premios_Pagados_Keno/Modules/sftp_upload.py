@@ -29,10 +29,17 @@ def asegurar_directorio_sftp(sftp, remote_dir: str) -> None:
         except FileNotFoundError:
             sftp.mkdir(current_path)
 
+
+def obtener_fecha_reporte(local_file_path: str) -> datetime:
+    file_path = Path(local_file_path)
+
+    return datetime.strptime(file_path.stem[:10], "%Y-%m-%d")
+
+
 def obtener_ruta_reportes(local_file_path: str) -> str:
     file_path = Path(local_file_path)
 
-    report_date = datetime.strptime(file_path.stem, "%Y-%m-%d")
+    report_date = obtener_fecha_reporte(local_file_path)
     year = str(report_date.year)
     month = MONTH_NAMES[report_date.month]
 
@@ -43,7 +50,46 @@ def obtener_ruta_reportes(local_file_path: str) -> str:
 
     return f"{base_dir}/{year}/{month}/{file_path.name}"
 
-def subir_reporte_premio_pagado(local_file_path: str) -> None:
+
+def obtener_ruta_directorio_ventas(local_file_path: str) -> str:
+    report_date = obtener_fecha_reporte(local_file_path)
+    year = str(report_date.year)
+    month = MONTH_NAMES[report_date.month]
+
+    sales_base_dir = os.getenv("SFTP_SALES_DIR", "/Sales").strip()
+
+    if not sales_base_dir.startswith("/"):
+        sales_base_dir = f"/{sales_base_dir}"
+
+    return f"{sales_base_dir}/{year}/{month}"
+
+
+def obtener_ruta_reporte_ventas(local_file_path: str) -> str:
+    file_path = Path(local_file_path)
+
+    return f"{obtener_ruta_directorio_ventas(local_file_path)}/{file_path.name}"
+
+
+def obtener_ruta_directorio_premios(local_file_path: str) -> str:
+    report_date = obtener_fecha_reporte(local_file_path)
+    year = str(report_date.year)
+    month = MONTH_NAMES[report_date.month]
+
+    prizes_base_dir = os.getenv("SFTP_PRIZES_DIR", "/Prizes").strip()
+
+    if not prizes_base_dir.startswith("/"):
+        prizes_base_dir = f"/{prizes_base_dir}"
+
+    return f"{prizes_base_dir}/{year}/{month}"
+
+
+def obtener_ruta_reporte_premios(local_file_path: str) -> str:
+    file_path = Path(local_file_path)
+
+    return f"{obtener_ruta_directorio_premios(local_file_path)}/{file_path.name}"
+
+
+def subir_archivo_sftp(local_file_path: str, remote_file_path: str) -> None:
     host = os.getenv("SFTP_HOST")
     port = int(os.getenv("SFTP_PORT", "22"))
     username = os.getenv("SFTP_USERNAME")
@@ -51,8 +97,7 @@ def subir_reporte_premio_pagado(local_file_path: str) -> None:
 
     if not all([host, username, password]):
         raise RuntimeError("Faltan credenciales SFTP en el archivo .env")
-    
-    remote_file_path = obtener_ruta_reportes(local_file_path)
+
     remote_dir = str(Path(remote_file_path).parent).replace("\\", "/")
 
     transport = paramiko.Transport((host, port))
@@ -64,6 +109,7 @@ def subir_reporte_premio_pagado(local_file_path: str) -> None:
         with paramiko.SFTPClient.from_transport(transport) as sftp:
             print(f"[INFO] Verificando ruta remota: {remote_dir}")
             asegurar_directorio_sftp(sftp, remote_dir)
+
             print("[INFO] Enviando archivo al SFTP.")
             sftp.put(local_file_path, remote_file_path)
 
@@ -71,3 +117,18 @@ def subir_reporte_premio_pagado(local_file_path: str) -> None:
     finally:
         print("[INFO] Cerrando conexion SFTP.")
         transport.close()
+
+
+def subir_reporte_ventas(local_file_path: str) -> None:
+    remote_file_path = obtener_ruta_reporte_ventas(local_file_path)
+    subir_archivo_sftp(local_file_path, remote_file_path)
+
+
+def subir_reporte_premios(local_file_path: str) -> None:
+    remote_file_path = obtener_ruta_reporte_premios(local_file_path)
+    subir_archivo_sftp(local_file_path, remote_file_path)
+
+
+def subir_reporte_premio_pagado(local_file_path: str) -> None:
+    remote_file_path = obtener_ruta_reportes(local_file_path)
+    subir_archivo_sftp(local_file_path, remote_file_path)

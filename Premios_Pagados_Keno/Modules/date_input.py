@@ -182,7 +182,7 @@ def preguntar_fecha_reporte() -> tuple[date, str] | None:
 def preguntar_reprocesamiento() -> bool:
     while True:
         answer = input_con_timeout(
-            "Deseas procesar otra fecha? (si/no): ",
+            "Deseas ejecutar nuevamente el proceso? (si/no): ",
             INPUT_TIMEOUT_SECONDS,
         )
 

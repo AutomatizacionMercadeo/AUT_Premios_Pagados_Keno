@@ -7,23 +7,37 @@ El flujo usa Playwright para navegar la interfaz web, Paramiko para la conexion 
 ## Flujo General
 
 1. Carga variables desde `Premios_Pagados_Keno/.env`.
-2. Pregunta una fecha de reporte por terminal.
-3. Si no se ingresa fecha, usa el filtro `Ayer`.
-4. Si se ingresa fecha, usa un rango fijo con esa fecha como inicio y fin.
-5. Limpia la carpeta local de reportes antes de ejecutar.
-6. Inicia Chromium con Playwright.
-7. Inicia sesion en Metabase.
-8. Navega al dashboard `Keno Ventas y Premios - Region 3`.
-9. Aplica filtros de estado y fecha.
-10. Descarga el resultado en `.csv`.
-11. Guarda el archivo con nombre `YYYY-MM-DD.csv`.
-12. Se conecta al SFTP.
-13. Crea la ruta remota si no existe.
-14. Sube el archivo al SFTP.
-15. Cierra el navegador.
-16. Pregunta si se desea procesar otra fecha.
-17. Si la respuesta es `si`, vuelve a iniciar desde el input de fecha.
-18. Si la respuesta es `no` o no hay respuesta en 10 segundos, termina la ejecucion.
+2. Limpia la carpeta local de reportes antes de ejecutar.
+3. Inicia Chromium con Playwright e inicia sesion en Metabase.
+4. Navega al dashboard `Keno Ventas y Premios - Region 3`.
+5. Verifica que el dashboard este en `Venta` y limpia sus filtros actuales.
+6. Filtra `Fecha de Venta` desde el primer dia del mes de ayer hasta ayer.
+7. Descarga el consolidado de `Apuestas` y lo sube a `Sales`.
+8. Regresa mediante scroll al inicio y cambia a `Premio`.
+9. Revierte y limpia los filtros actuales de premios.
+10. Filtra `Estado Transaccion` por `Finalizado`.
+11. Filtra `Fecha Pago de Premio` desde el 1 de enero hasta ayer.
+12. Descarga el acumulado y lo sube a `Premios`.
+13. Limpia nuevamente los filtros de premios y conserva el estado `Finalizado`.
+14. Filtra `Fecha Pago de Premio` por `Ayer`.
+15. Descarga el reporte diario y lo sube a `Paid_Prizes`.
+16. En todos los destinos crea la ruta remota de anio y mes si no existe.
+17. Cierra el navegador y pregunta si se desea ejecutar nuevamente.
+
+La carga de los controles de ventas dispone de hasta 90 segundos despues de
+aplicar la seleccion de `Venta` y la limpieza de filtros.
+
+El cambio entre `Venta` y `Premio` pulsa directamente la pestaña identificada
+por `data-testid="tab-button-input-wrapper"` y el valor de su `input`. No se usa
+la visibilidad para determinar cual esta activa, porque ambas pestañas pueden
+estar visibles simultaneamente.
+
+La limpieza de filtros de `Venta` y `Premio` usa la misma logica. Primero busca
+directamente SVG visibles con clase `Icon-revert`, rol `img` y etiqueta
+`revert icon`. Si existen, los pulsa todos,
+confirma la reversion con `Aplicar` y espera 3 segundos. Luego localiza todas las
+X visibles, las pulsa una por una y espera hasta 90 segundos a que aparezca el
+boton inferior `Aplicar` antes de confirmar nuevamente los cambios.
 
 ## Estructura Del Proyecto
 
@@ -59,7 +73,9 @@ Gestiona Playwright:
 
 `web/open_login_page.py`
 
-Abre la URL configurada en `WEB_URL`. Si la pagina no carga correctamente o no aparece el texto de inicio de sesion, cierra el navegador y vuelve a intentar.
+Abre la URL configurada en `WEB_URL`. Cada intento dispone de un maximo total de
+90 segundos para cargar la pagina y mostrar el inicio de sesion. Si no queda
+lista, cierra el navegador, espera 3 segundos y vuelve a intentar.
 
 `web/navigation.py`
 
@@ -75,17 +91,9 @@ Contiene la navegacion principal:
 
 `Modules/date_input.py`
 
-Gestiona la fecha del reporte ingresada por terminal:
-
-- Acepta dia, mes y anio.
-- El mes puede ingresarse como numero o como texto.
-- Normaliza el mes sin importar mayusculas/minusculas.
-- Convierte la fecha a texto para los inputs de Metabase, por ejemplo `1 de junio de 2026`.
-- Si pasan 10 segundos sin input en algun campo, usa el flujo por defecto `Ayer`.
-- Si el usuario deja los tres campos vacios, usa `Ayer`.
-- Si solo llena uno o dos campos, muestra cuales datos faltan.
-- Valida que la fecha ingresada sea igual o anterior a la fecha de ayer.
-- Al final del procesamiento pregunta si se desea ejecutar otra fecha.
+Gestiona la pregunta de reprocesamiento al final de cada ejecucion. Los rangos de
+ventas y premios se calculan automaticamente y ya no se solicita una fecha al
+inicio.
 
 `Modules/reports_folder.py`
 
@@ -93,8 +101,8 @@ Gestiona la carpeta local de reportes:
 
 - Limpia la carpeta antes de cada ejecucion.
 - Espera el evento real de descarga de Playwright.
-- Guarda el CSV con nombre basado en la fecha del reporte.
-- Si no se ingreso fecha, usa la fecha de ayer.
+- Guarda el CSV de premios usando la fecha de corte de ayer.
+- Permite asignar al consolidado de ventas un nombre basado en su rango mensual.
 
 `Modules/sftp_upload.py`
 
@@ -153,6 +161,8 @@ SFTP_PORT=22
 SFTP_USERNAME=usuario-sftp
 SFTP_PASSWORD=password-sftp
 SFTP_BASE_DIR=/Paid_Prizes
+SFTP_SALES_DIR=/Sales
+SFTP_PRIZES_DIR=/Prizes
 ```
 
 Notas:
@@ -160,6 +170,8 @@ Notas:
 - `HEADLESS=false` permite ver el navegador durante la ejecucion.
 - `HEADLESS=true` ejecuta el navegador en segundo plano.
 - `SFTP_BASE_DIR` define la carpeta raiz remota donde se suben los reportes.
+- `SFTP_SALES_DIR` define la carpeta raiz remota de ventas. Si no se configura, usa `/Sales`.
+- `SFTP_PRIZES_DIR` define la carpeta raiz de premios acumulados. Si no se configura, usa `/Prizes`.
 - No subir el archivo `.env` al repositorio.
 
 ## Ejecucion
@@ -176,78 +188,24 @@ Ejecutar:
 python main.py
 ```
 
-## Input De Fecha
+## Fechas Automaticas
 
-Al iniciar, el programa pregunta:
+- Ventas: desde el primer dia del mes al que pertenece ayer hasta ayer.
+- Premios acumulados: desde el 1 de enero del anio al que pertenece ayer hasta ayer.
+- Premios diarios: solamente ayer.
 
-```text
-Dia:
-Mes (numero o nombre):
-Anio:
-```
-
-### Usar Fecha Personalizada
-
-Ejemplos validos:
-
-```text
-Dia: 1
-Mes (numero o nombre): junio
-Anio: 2026
-```
-
-```text
-Dia: 1
-Mes (numero o nombre): 6
-Anio: 2026
-```
-
-Ambos generan el texto:
-
-```text
-1 de junio de 2026
-```
-
-Ese texto se usa para llenar `Fecha de inicio` y `Fecha de fin`.
-
-### Usar Ayer
-
-El flujo usa `Ayer` cuando:
-
-- El usuario deja los tres campos vacios.
-- El usuario no ingresa ningun valor durante 10 segundos en cualquiera de los campos.
-
-### Datos Incompletos
-
-Si el usuario ingresa solo uno o dos campos, el programa informa que datos faltan.
-
-Ejemplo:
-
-```text
-Faltan datos por ingresar: mes, anio. Completa dia, mes y anio, o deja los tres campos vacios para usar 'Ayer'.
-```
-
-### Fechas Futuras O Del Dia Actual
-
-La fecha ingresada debe corresponder a un dia que ya haya pasado. El programa compara la fecha ingresada contra la fecha de ayer.
-
-Si la fecha ingresada es mayor a ayer, muestra una advertencia y vuelve a pedir los datos.
-
-Ejemplo de advertencia:
-
-```text
-La fecha ingresada corresponde a un dia que todavia no ha pasado. Ingresa una fecha igual o menor a 17 de junio de 2026.
-```
+Por ejemplo, en una ejecucion del 24 de julio de 2026, premios utiliza el rango
+`1 de enero de 2026` a `23 de julio de 2026`.
 
 ## Reprocesamiento
 
 Al finalizar una ejecucion completa, el programa pregunta:
 
 ```text
-Deseas procesar otra fecha? (si/no):
+Deseas ejecutar nuevamente el proceso? (si/no):
 ```
 
-Si el usuario responde `si`, el flujo vuelve a empezar desde el input de fecha.
+Si el usuario responde `si`, el flujo completo vuelve a empezar.
 
 Si responde `no`, termina la ejecucion.
 
@@ -271,7 +229,7 @@ no
 
 ## Nombre Del Archivo
 
-El CSV se guarda con el formato:
+El CSV diario de premios se guarda con el formato:
 
 ```text
 YYYY-MM-DD.csv
@@ -284,9 +242,33 @@ Ejemplos:
 2027-01-01.csv
 ```
 
-Si el usuario ingresa una fecha, el nombre del archivo usa esa fecha.
+El consolidado acumulado de premios se diferencia con el sufijo `_acumulado`:
 
-Si el usuario no ingresa fecha, el nombre del archivo usa la fecha de ayer.
+```text
+YYYY-MM-DD_acumulado.csv
+```
+
+Ejemplo:
+
+```text
+2026-07-23_acumulado.csv
+```
+
+El consolidado de ventas incluye el rango mensual en el nombre:
+
+```text
+YYYY-MM-01_YYYY-MM-DD.csv
+```
+
+Ejemplo:
+
+```text
+2026-07-01_2026-07-23.csv
+```
+
+El periodo se calcula usando el mes al que pertenece ayer. Esto permite que el
+dia 1 de cada mes se descargue correctamente el consolidado completo del mes
+anterior, en lugar de construir un rango de fechas invertido.
 
 ## Carpeta Local De Reportes
 
@@ -315,6 +297,33 @@ Ejemplo:
 ```
 
 Si las carpetas no existen, el programa las crea.
+
+Para el consolidado acumulado de premios verifica y crea:
+
+```text
+/Prizes/ANIO/MES/ARCHIVO_acumulado.csv
+```
+
+Ejemplo:
+
+```text
+/Prizes/2026/Julio/2026-07-23_acumulado.csv
+```
+
+Para ventas verifica y crea la estructura:
+
+```text
+/Sales/ANIO/MES/ARCHIVO.csv
+```
+
+Ejemplo:
+
+```text
+/Sales/2026/Julio/2026-07-01_2026-07-23.csv
+```
+
+El anio y el mes de todos los destinos se obtienen del nombre del reporte para
+mantener cada archivo dentro del periodo correspondiente.
 
 Esto evita errores en cambios de mes o anio. Por ejemplo, si el programa se ejecuta el `2027-01-01` y el archivo generado es:
 
@@ -362,9 +371,6 @@ El proyecto maneja estos casos:
 
 - Si Metabase no carga, cierra y reabre el navegador.
 - Si no existe `WEB_URL`, lanza un error claro.
-- Si la fecha del usuario esta incompleta, informa campos faltantes.
-- Si la fecha es invalida, solicita corregirla.
-- Si la fecha ingresada es mayor a ayer, solicita otra fecha.
 - Si no se descarga el archivo dentro del timeout, informa fallo de descarga.
 - Si faltan credenciales SFTP, lanza un error claro.
 - Si no hay respuesta en la pregunta de reprocesamiento, finaliza la ejecucion.

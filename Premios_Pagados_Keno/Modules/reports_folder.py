@@ -18,7 +18,11 @@ def clear_reports_folder() -> None:
         elif os.path.isdir(item_path):
             shutil.rmtree(item_path)
 
-def download_report(page, report_date: date | None = None) -> str:
+def download_report(
+    page,
+    report_date: date | None = None,
+    file_name: str | None = None,
+) -> str:
     print("[INFO] Esperando evento de descarga.")
     with page.expect_download(timeout=120000) as download_info:
         page.get_by_role("button", name=re.compile(r"^Descargar$")).click()
@@ -26,8 +30,11 @@ def download_report(page, report_date: date | None = None) -> str:
     download = download_info.value
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-    file_date = report_date or (datetime.now() - timedelta(days=1)).date()
-    download_path = os.path.join(DOWNLOAD_DIR, f"{file_date:%Y-%m-%d}.csv")
+    if file_name is None:
+        file_date = report_date or (datetime.now() - timedelta(days=1)).date()
+        file_name = f"{file_date:%Y-%m-%d}.csv"
+
+    download_path = os.path.join(DOWNLOAD_DIR, file_name)
 
     download.save_as(download_path)
     print(f"[INFO] Archivo descargado: {download_path}")

@@ -1,25 +1,297 @@
-import time, os, re
+import os
+import re
+import time
+from datetime import date, timedelta
 
-from Modules.date_input import preguntar_fecha_reporte
 from Modules.reports_folder import clear_reports_folder, download_report
+from Modules.sftp_upload import (
+    subir_reporte_premio_pagado,
+    subir_reporte_premios,
+    subir_reporte_ventas,
+)
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from web.browser import BrowserManager
 from web.open_login_page import open_login_page
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from Modules.sftp_upload import subir_reporte_premio_pagado
 
 
-def navigation(report_date = None):
+MONTH_NAMES = {
+    1: "enero",
+    2: "febrero",
+    3: "marzo",
+    4: "abril",
+    5: "mayo",
+    6: "junio",
+    7: "julio",
+    8: "agosto",
+    9: "septiembre",
+    10: "octubre",
+    11: "noviembre",
+    12: "diciembre",
+}
+DASHBOARD_TIMEOUT_MS = 90000
+
+
+def seleccionar_tipo_reporte(page, report_type: str) -> None:
+    report_tab = page.locator(
+        '[data-testid="tab-button-input-wrapper"]',
+        has=page.locator(f'input[value="{report_type}"]'),
+    ).first
+
+    print(f"[INFO] Seleccionando directamente la seccion: {report_type}.")
+    report_tab.wait_for(state="visible", timeout=DASHBOARD_TIMEOUT_MS)
+    report_tab.click(timeout=DASHBOARD_TIMEOUT_MS)
+    time.sleep(3)
+
+
+def limpiar_filtros(page) -> None:
+    close_icon = page.locator('svg[aria-label="close icon"]:visible')
+
+    if close_icon.count() > 0:
+        print("[INFO] Eliminando filtros seleccionados.")
+
+        while close_icon.count() > 0:
+            close_icon.first.click()
+            time.sleep(1.5)
+    else:
+        print("[INFO] No hay filtros seleccionados para eliminar.")
+
+
+def aplicar_limpieza_filtros(page, report_type: str) -> None:
+    apply_button = page.get_by_role("button", name="Aplicar", exact=True)
+    print(f"[INFO] Esperando confirmacion de filtros de {report_type}.")
+    apply_button.wait_for(
+        state="visible",
+        timeout=DASHBOARD_TIMEOUT_MS,
+    )
+    apply_button.click(timeout=DASHBOARD_TIMEOUT_MS)
+
+
+def revertir_filtros_si_es_necesario(page, report_type: str) -> None:
+    revert_icons = page.locator(
+        'svg.Icon-revert[role="img"][aria-label="revert icon"]:visible'
+    )
+
+    try:
+        revert_icons.first.wait_for(state="visible", timeout=10000)
+    except PlaywrightTimeoutError:
+        print(f"[INFO] No hay filtros pendientes por revertir en {report_type}.")
+        return
+
+    print(f"[INFO] Revirtiendo filtros pendientes de {report_type}.")
+
+    while revert_icons.count() > 0:
+        revert_icons.first.click(timeout=DASHBOARD_TIMEOUT_MS)
+        time.sleep(1.5)
+
+    print(f"[INFO] Aplicando reversion de filtros de {report_type}.")
+    aplicar_limpieza_filtros(page, report_type)
+    time.sleep(3)
+
+
+def esperar_resultados(page) -> None:
+    print("[INFO] Esperando resultados.")
+
+    while not page.get_by_text("Por Departamento").is_visible():
+        time.sleep(3)
+
+
+def formatear_fecha_metabase(report_date: date) -> str:
+    month_name = MONTH_NAMES[report_date.month]
+    return f"{report_date.day} de {month_name} de {report_date.year}"
+
+
+def preparar_descarga_csv(page, section_title: str) -> None:
+    print(f"[INFO] Buscando la seccion {section_title}.")
+    title = page.locator(
+        '[data-testid="legend-caption-title"]',
+        has_text=re.compile(rf"^{re.escape(section_title)}$"),
+    ).first
+    title.wait_for(state="attached", timeout=30000)
+    title.evaluate(
+        "(element) => element.scrollIntoView({ block: 'center', inline: 'nearest' })"
+    )
+    title.wait_for(state="visible", timeout=10000)
+
+    ellipsis_button = page.locator(
+        'button:has(svg[aria-label="ellipsis icon"])'
+    ).last
+    ellipsis_button.wait_for(state="visible", timeout=10000)
+    ellipsis_button.click()
+
+    time.sleep(3)
+    page.get_by_text("Descargar resultado").click()
+
+    time.sleep(3)
+    page.get_by_text(".csv").click()
+
+    time.sleep(3)
+
+
+def volver_al_inicio(page) -> None:
+    print("[INFO] Regresando al inicio del dashboard.")
+    page.evaluate(
+        """
+        () => {
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        }
+        """
+    )
+    page.locator('[data-testid="tab-button-input-wrapper"]').first.scroll_into_view_if_needed()
+    time.sleep(3)
+
+
+def configurar_y_descargar_ventas(page) -> None:
+    seleccionar_tipo_reporte(page, "Venta")
+    sales_date_filter = page.get_by_text("Fecha de Venta", exact=True)
+    revertir_filtros_si_es_necesario(page, "ventas")
+    limpiar_filtros(page)
+
+    print("[INFO] Aplicando limpieza de filtros de ventas.")
+    aplicar_limpieza_filtros(page, "ventas")
+    print("[INFO] Esperando que se actualicen los filtros de ventas.")
+    sales_date_filter.wait_for(
+        state="visible",
+        timeout=DASHBOARD_TIMEOUT_MS,
+    )
+
+    yesterday = date.today() - timedelta(days=1)
+    month_start = yesterday.replace(day=1)
+
+    month_name = MONTH_NAMES[yesterday.month]
+    calendar_title = f"{month_name} {yesterday.year}"
+    start_date_label = f"{month_start.day} {month_name} {month_start.year}"
+    end_date_label = f"{yesterday.day} {month_name} {yesterday.year}"
+
+    print(
+        "[INFO] Configurando fecha de venta: "
+        f"{month_start:%Y-%m-%d} hasta {yesterday:%Y-%m-%d}."
+    )
+    sales_date_filter.click(timeout=DASHBOARD_TIMEOUT_MS)
+    page.get_by_role(
+        "button",
+        name=re.compile(r"^Rango de fechas fijo"),
+    ).click()
+
+    page.get_by_role("button", name=calendar_title, exact=True).wait_for(
+        state="visible",
+        timeout=10000,
+    )
+    page.get_by_role("button", name=start_date_label, exact=True).click()
+    page.get_by_role("button", name=end_date_label, exact=True).click()
+    page.get_by_role("button", name="Añadir filtro", exact=True).click()
+
+    print("[INFO] Aplicando filtros de ventas.")
+    page.get_by_role("button", name="Aplicar").click()
+    esperar_resultados(page)
+
+    preparar_descarga_csv(page, "Apuestas")
+    sales_file_name = f"{month_start:%Y-%m-%d}_{yesterday:%Y-%m-%d}.csv"
+
+    print("[INFO] Descargando consolidado de ventas.")
+    download_path = download_report(page, file_name=sales_file_name)
+    print("[INFO] Subiendo consolidado de ventas al SFTP.")
+    subir_reporte_ventas(download_path)
+    volver_al_inicio(page)
+
+
+def preparar_filtros_base_premios(page):
+    seleccionar_tipo_reporte(page, "Premio")
+    revertir_filtros_si_es_necesario(page, "premios")
+    limpiar_filtros(page)
+
+    print("[INFO] Aplicando filtro de premio.")
+    aplicar_limpieza_filtros(page, "premios")
+
+    prize_date_filter = page.get_by_text("Fecha Pago de Premio", exact=True)
+    prize_date_filter.wait_for(
+        state="visible",
+        timeout=DASHBOARD_TIMEOUT_MS,
+    )
+
+    print("[INFO] Filtrando transacciones finalizadas.")
+    page.get_by_text("Estado Transaccion").click()
+    page.get_by_text("Finalizado").click()
+    page.get_by_text("Restablecer al valor predeterminado").click()
+
+    return prize_date_filter
+
+
+def configurar_y_descargar_premios_acumulados(page, yesterday: date) -> None:
+    prize_date_filter = preparar_filtros_base_premios(page)
+    year_start = yesterday.replace(month=1, day=1)
+    start_date_text = formatear_fecha_metabase(year_start)
+    end_date_text = formatear_fecha_metabase(yesterday)
+
+    print(
+        "[INFO] Configurando fecha de pago de premios: "
+        f"{year_start:%Y-%m-%d} hasta {yesterday:%Y-%m-%d}."
+    )
+    prize_date_filter.click(timeout=DASHBOARD_TIMEOUT_MS)
+    page.get_by_role(
+        "button",
+        name=re.compile(r"Rango de fechas fijo"),
+    ).click()
+    page.get_by_label("Fecha de inicio").click()
+    page.get_by_label("Fecha de inicio").fill(start_date_text)
+    page.get_by_label("Fecha de fin").click()
+    page.get_by_label("Fecha de fin").fill(end_date_text)
+    page.get_by_role("button", name="Añadir filtro").click()
+
+    print("[INFO] Aplicando filtros de premios acumulados.")
+    page.get_by_role("button", name="Aplicar").click()
+    esperar_resultados(page)
+    preparar_descarga_csv(page, "Premios")
+
+    try:
+        print("[INFO] Descargando consolidado acumulado de premios.")
+        accumulated_file_name = f"{yesterday:%Y-%m-%d}_acumulado.csv"
+        download_path = download_report(page, file_name=accumulated_file_name)
+        print("[INFO] Subiendo premios acumulados al SFTP.")
+        subir_reporte_premios(download_path)
+    except PlaywrightTimeoutError:
+        print("[ERROR] No se pudo descargar el acumulado de premios.")
+
+
+def configurar_y_descargar_premios_diarios(page, yesterday: date) -> None:
+    prize_date_filter = preparar_filtros_base_premios(page)
+
+    print(f"[INFO] Configurando premios diarios para: {yesterday:%Y-%m-%d}.")
+    prize_date_filter.click(timeout=DASHBOARD_TIMEOUT_MS)
+    page.get_by_text("Ayer", exact=True).click()
+
+    print("[INFO] Aplicando filtros de premios diarios.")
+    page.get_by_role("button", name="Aplicar").click()
+    esperar_resultados(page)
+    preparar_descarga_csv(page, "Premios")
+
+    try:
+        print("[INFO] Descargando reporte diario de premios.")
+        download_path = download_report(page, report_date=yesterday)
+        print("[INFO] Subiendo reporte diario a Paid_Prizes.")
+        subir_reporte_premio_pagado(download_path)
+    except PlaywrightTimeoutError:
+        print("[ERROR] No se pudo descargar el reporte diario de premios.")
+
+
+def configurar_y_descargar_premios(page) -> None:
+    yesterday = date.today() - timedelta(days=1)
+
+    print("[INFO] Iniciando consolidado acumulado de premios.")
+    configurar_y_descargar_premios_acumulados(page, yesterday)
+
+    volver_al_inicio(page)
+
+    print("[INFO] Iniciando reporte diario de premios.")
+    configurar_y_descargar_premios_diarios(page, yesterday)
+
+
+def navigation():
     print("[INFO] Iniciando procesamiento.")
     headless = os.getenv("HEADLESS", "false").lower() == "true"
     web_username = os.getenv("WEB_USERNAME", "")
     web_password = os.getenv("WEB_PASSWORD", "")
-    report_date_input = preguntar_fecha_reporte()
-    report_date = None
-    report_date_text = None
-
-    if report_date_input is not None:
-        report_date, report_date_text = report_date_input
-
     print("[INFO] Limpiando carpeta de reportes.")
     clear_reports_folder()
     manager = BrowserManager(headless=headless)
@@ -42,84 +314,13 @@ def navigation(report_date = None):
 
         time.sleep(3)
 
-        print("[INFO] Seleccionando reporte de premios.")
-        page.locator('[data-testid="tab-button-input-wrapper"]:has(input[value="Premio"])').click()
+        print("[INFO] Iniciando flujo de ventas.")
+        configurar_y_descargar_ventas(page)
 
-        time.sleep(3)
-
-        close_icon = page.locator('svg[aria-label="close icon"]')
-
-        while close_icon.first.is_visible():
-            close_icon.first.click()
-            time.sleep(1.5)
-
-        print("[INFO] Aplicando filtro de premio.")
-        page.get_by_role("button", name="Aplicar").click()
-
-        print("[INFO] Filtrando transacciones finalizadas.")
-        page.get_by_text("Estado Transaccion").click()
-        page.get_by_text("Finalizado").click()
-        page.get_by_text("Restablecer al valor predeterminado").click()
-
-        print("[INFO] Configurando fecha de pago.")
-        page.get_by_text("Fecha Pago de Premio").click()
-        if report_date is None:
-            print("[INFO] Usando fecha: Ayer.")
-            page.get_by_text("Ayer").click()
-        else:
-            print(f"[INFO] Usando fecha personalizada: {report_date_text}.")
-            page.get_by_role("button", name = re.compile(r"Rango de fechas fijo")).click()
-
-            page.get_by_label("Fecha de inicio").click()
-            page.get_by_label("Fecha de inicio").fill(report_date_text)
-
-            page.get_by_label("Fecha de fin").click()
-            page.get_by_label("Fecha de fin").fill(report_date_text)
-
-            page.get_by_role("button", name = "Añadir filtro").click()
-
-        print("[INFO] Aplicando filtros.")
-        page.get_by_role("button", name="Aplicar").click()
-
-        print("[INFO] Esperando resultados.")
-        while not page.get_by_text("Por Departamento").is_visible():
-            time.sleep(3)
-
-        print("[INFO] Preparando descarga CSV.")
-        premios_title = page.locator(
-            '[data-testid="legend-caption-title"]',
-            has_text=re.compile(r"^Premios$"),
-        ).first
-        premios_title.wait_for(state="attached", timeout=30000)
-        premios_title.evaluate(
-            "(element) => element.scrollIntoView({ block: 'center', inline: 'nearest' })"
-        )
-        premios_title.wait_for(state="visible", timeout=10000)
-
-        ellipsis_button = page.locator('button:has(svg[aria-label="ellipsis icon"])').last
-        ellipsis_button.wait_for(state="visible", timeout=10000)
-        ellipsis_button.click()
-
-        time.sleep(3)
-
-        page.get_by_text("Descargar resultado").click()
-
-        time.sleep(3)
-
-        page.get_by_text(".csv").click()
-
-        time.sleep(3)
-
-        try:
-            print("[INFO] Descargando reporte.")
-            download_path = download_report(page, report_date)
-            print("[INFO] Subiendo reporte al SFTP.")
-            subir_reporte_premio_pagado(download_path)
-        except PlaywrightTimeoutError:
-            print("[ERROR] No se pudo descargar el archivo. Cerrando navegador...")
-
-    except Exception as e:
-        print(f"[ERROR] Ocurrio un error: {e}")
+        print("[INFO] Iniciando flujo de premios.")
+        configurar_y_descargar_premios(page)
+    except Exception as error:
+        print(f"[ERROR] Ocurrio un error: {error}")
         raise
     finally:
         print("[INFO] Cerrando navegador.")
