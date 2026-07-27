@@ -301,29 +301,41 @@ Si las carpetas no existen, el programa las crea.
 Para el consolidado acumulado de premios verifica y crea:
 
 ```text
-/Prizes/ANIO/MES/ARCHIVO_acumulado.csv
+/Prizes/ANIO/premios_acumulados.csv
 ```
 
 Ejemplo:
 
 ```text
-/Prizes/2026/Julio/2026-07-23_acumulado.csv
+/Prizes/2026/premios_acumulados.csv
 ```
+
+Como este reporte acumula los premios desde el 1 de enero hasta la fecha de
+corte, se almacena directamente dentro del anio y no se divide en carpetas
+mensuales.
 
 Para ventas verifica y crea la estructura:
 
 ```text
-/Sales/ANIO/MES/ARCHIVO.csv
+/Sales/ANIO/MES/ventas_acumuladas.csv
 ```
 
 Ejemplo:
 
 ```text
-/Sales/2026/Julio/2026-07-01_2026-07-23.csv
+/Sales/2026/Julio/ventas_acumuladas.csv
 ```
 
-El anio y el mes de todos los destinos se obtienen del nombre del reporte para
-mantener cada archivo dentro del periodo correspondiente.
+Los consolidados conservan nombres con fechas mientras se encuentran en la
+carpeta local, pero se cargan al SFTP con nombres remotos fijos. Por eso, cada
+nueva ejecucion sobrescribe el acumulado anterior de su carpeta de destino y no
+deja multiples versiones con fechas de corte diferentes. Antes de la carga,
+tambien elimina de esa carpeta los consolidados historicos que tengan el formato
+anterior con fechas en el nombre. Esta limpieza no afecta los reportes diarios
+de `Paid_Prizes` ni archivos con otros nombres.
+
+El periodo de los destinos se obtiene del nombre del reporte: `Prizes` usa el
+anio, mientras que `Sales` y `Paid_Prizes` usan el anio y el mes.
 
 Esto evita errores en cambios de mes o anio. Por ejemplo, si el programa se ejecuta el `2027-01-01` y el archivo generado es:
 
