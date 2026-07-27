@@ -11,17 +11,17 @@ El flujo usa Playwright para navegar la interfaz web, Paramiko para la conexion 
 3. Inicia Chromium con Playwright e inicia sesion en Metabase.
 4. Navega al dashboard `Keno Ventas y Premios - Region 3`.
 5. Verifica que el dashboard este en `Venta` y limpia sus filtros actuales.
-6. Filtra `Fecha de Venta` desde el primer dia del mes de ayer hasta ayer.
+6. Filtra `Fecha de Venta` desde el 1 de enero del anio de ayer hasta ayer.
 7. Descarga el consolidado de `Apuestas` y lo sube a `Sales`.
 8. Regresa mediante scroll al inicio y cambia a `Premio`.
 9. Revierte y limpia los filtros actuales de premios.
-10. Filtra `Estado Transaccion` por `Finalizado`.
+10. Abre `Estado Transaccion`, marca `Finalizado` y usa `Restablecer al valor predeterminado` para el acumulado anual.
 11. Filtra `Fecha Pago de Premio` desde el 1 de enero hasta ayer.
-12. Descarga el acumulado y lo sube a `Premios`.
-13. Limpia nuevamente los filtros de premios y conserva el estado `Finalizado`.
+12. Descarga el acumulado y lo sube a `Prizes`.
+13. Limpia nuevamente los filtros de premios y filtra `Estado Transaccion` por `Finalizado` para el reporte diario.
 14. Filtra `Fecha Pago de Premio` por `Ayer`.
 15. Descarga el reporte diario y lo sube a `Paid_Prizes`.
-16. En todos los destinos crea la ruta remota de anio y mes si no existe.
+16. Crea las rutas remotas de anio y, solo para `Paid_Prizes`, de mes si no existen.
 17. Cierra el navegador y pregunta si se desea ejecutar nuevamente.
 
 La carga de los controles de ventas dispone de hasta 90 segundos despues de
@@ -102,7 +102,7 @@ Gestiona la carpeta local de reportes:
 - Limpia la carpeta antes de cada ejecucion.
 - Espera el evento real de descarga de Playwright.
 - Guarda el CSV de premios usando la fecha de corte de ayer.
-- Permite asignar al consolidado de ventas un nombre basado en su rango mensual.
+- Permite asignar al consolidado de ventas un nombre basado en su rango anual.
 
 `Modules/sftp_upload.py`
 
@@ -190,7 +190,7 @@ python main.py
 
 ## Fechas Automaticas
 
-- Ventas: desde el primer dia del mes al que pertenece ayer hasta ayer.
+- Ventas: desde el 1 de enero del anio al que pertenece ayer hasta ayer.
 - Premios acumulados: desde el 1 de enero del anio al que pertenece ayer hasta ayer.
 - Premios diarios: solamente ayer.
 
@@ -254,21 +254,21 @@ Ejemplo:
 2026-07-23_acumulado.csv
 ```
 
-El consolidado de ventas incluye el rango mensual en el nombre:
+El consolidado de ventas incluye el rango anual en el nombre:
 
 ```text
-YYYY-MM-01_YYYY-MM-DD.csv
+YYYY-01-01_YYYY-MM-DD.csv
 ```
 
 Ejemplo:
 
 ```text
-2026-07-01_2026-07-23.csv
+2026-01-01_2026-07-23.csv
 ```
 
-El periodo se calcula usando el mes al que pertenece ayer. Esto permite que el
-dia 1 de cada mes se descargue correctamente el consolidado completo del mes
-anterior, en lugar de construir un rango de fechas invertido.
+El periodo se calcula usando el anio al que pertenece ayer. Esto permite que el
+1 de enero se descargue correctamente el consolidado completo del anio anterior,
+en lugar de construir un rango de fechas invertido.
 
 ## Carpeta Local De Reportes
 
@@ -317,13 +317,13 @@ mensuales.
 Para ventas verifica y crea la estructura:
 
 ```text
-/Sales/ANIO/MES/ventas_acumuladas.csv
+/Sales/ANIO/ventas_acumuladas.csv
 ```
 
 Ejemplo:
 
 ```text
-/Sales/2026/Julio/ventas_acumuladas.csv
+/Sales/2026/ventas_acumuladas.csv
 ```
 
 Los consolidados conservan nombres con fechas mientras se encuentran en la
@@ -334,8 +334,8 @@ tambien elimina de esa carpeta los consolidados historicos que tengan el formato
 anterior con fechas en el nombre. Esta limpieza no afecta los reportes diarios
 de `Paid_Prizes` ni archivos con otros nombres.
 
-El periodo de los destinos se obtiene del nombre del reporte: `Prizes` usa el
-anio, mientras que `Sales` y `Paid_Prizes` usan el anio y el mes.
+El periodo de los destinos se obtiene del nombre del reporte: `Sales` y
+`Prizes` usan el anio, mientras que `Paid_Prizes` usa el anio y el mes.
 
 Esto evita errores en cambios de mes o anio. Por ejemplo, si el programa se ejecuta el `2027-01-01` y el archivo generado es:
 

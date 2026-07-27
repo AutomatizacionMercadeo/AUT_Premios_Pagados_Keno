@@ -157,16 +157,13 @@ def configurar_y_descargar_ventas(page) -> None:
     )
 
     yesterday = date.today() - timedelta(days=1)
-    month_start = yesterday.replace(day=1)
-
-    month_name = MONTH_NAMES[yesterday.month]
-    calendar_title = f"{month_name} {yesterday.year}"
-    start_date_label = f"{month_start.day} {month_name} {month_start.year}"
-    end_date_label = f"{yesterday.day} {month_name} {yesterday.year}"
+    year_start = yesterday.replace(month=1, day=1)
+    start_date_text = formatear_fecha_metabase(year_start)
+    end_date_text = formatear_fecha_metabase(yesterday)
 
     print(
         "[INFO] Configurando fecha de venta: "
-        f"{month_start:%Y-%m-%d} hasta {yesterday:%Y-%m-%d}."
+        f"{year_start:%Y-%m-%d} hasta {yesterday:%Y-%m-%d}."
     )
     sales_date_filter.click(timeout=DASHBOARD_TIMEOUT_MS)
     page.get_by_role(
@@ -174,12 +171,10 @@ def configurar_y_descargar_ventas(page) -> None:
         name=re.compile(r"^Rango de fechas fijo"),
     ).click()
 
-    page.get_by_role("button", name=calendar_title, exact=True).wait_for(
-        state="visible",
-        timeout=10000,
-    )
-    page.get_by_role("button", name=start_date_label, exact=True).click()
-    page.get_by_role("button", name=end_date_label, exact=True).click()
+    page.get_by_label("Fecha de inicio").click()
+    page.get_by_label("Fecha de inicio").fill(start_date_text)
+    page.get_by_label("Fecha de fin").click()
+    page.get_by_label("Fecha de fin").fill(end_date_text)
     page.get_by_role("button", name="Añadir filtro", exact=True).click()
 
     print("[INFO] Aplicando filtros de ventas.")
@@ -187,7 +182,7 @@ def configurar_y_descargar_ventas(page) -> None:
     esperar_resultados(page)
 
     preparar_descarga_csv(page, "Apuestas")
-    sales_file_name = f"{month_start:%Y-%m-%d}_{yesterday:%Y-%m-%d}.csv"
+    sales_file_name = f"{year_start:%Y-%m-%d}_{yesterday:%Y-%m-%d}.csv"
 
     print("[INFO] Descargando consolidado de ventas.")
     download_path = download_report(page, file_name=sales_file_name)
@@ -196,7 +191,7 @@ def configurar_y_descargar_ventas(page) -> None:
     volver_al_inicio(page)
 
 
-def preparar_filtros_base_premios(page):
+def preparar_filtros_base_premios(page, es_reporte_diario: bool):
     seleccionar_tipo_reporte(page, "Premio")
     revertir_filtros_si_es_necesario(page, "premios")
     limpiar_filtros(page)
@@ -210,16 +205,49 @@ def preparar_filtros_base_premios(page):
         timeout=DASHBOARD_TIMEOUT_MS,
     )
 
-    print("[INFO] Filtrando transacciones finalizadas.")
-    page.get_by_text("Estado Transaccion").click()
-    page.get_by_text("Finalizado").click()
-    page.get_by_text("Restablecer al valor predeterminado").click()
+    if es_reporte_diario:
+        print("[INFO] Filtrando transacciones finalizadas.")
+        page.get_by_text("Estado Transaccion").click()
+        page.get_by_text("Finalizado").click()
+        page.get_by_text("Restablecer al valor predeterminado").click()
+    else:
+        print("[INFO] Filtrando transacciones finalizadas para el consolidado anual.")
+        time.sleep(2)
+        page.get_by_role(
+            "button",
+            name="Estado Transaccion",
+            exact=True,
+        ).click(timeout=DASHBOARD_TIMEOUT_MS)
+        finalized_checkbox = page.locator(
+            'input[data-testid="Finalizado-filter-value"]'
+        )
+        finalized_checkbox.wait_for(
+            state="visible",
+            timeout=DASHBOARD_TIMEOUT_MS,
+        )
+        finalized_checkbox.check(timeout=DASHBOARD_TIMEOUT_MS)
+        state_filter_dialog = finalized_checkbox.locator(
+            "xpath=ancestor::*[@role='dialog'][1]"
+        )
+        state_filter_dialog.get_by_text(
+            "Restablecer al valor predeterminado",
+            exact=True,
+        ).click(timeout=DASHBOARD_TIMEOUT_MS)
+        state_filter_dialog.wait_for(
+            state="hidden",
+            timeout=DASHBOARD_TIMEOUT_MS,
+        )
+        print("[INFO] Esperando que se registre el filtro de estado.")
+        time.sleep(2)
 
     return prize_date_filter
 
 
 def configurar_y_descargar_premios_acumulados(page, yesterday: date) -> None:
-    prize_date_filter = preparar_filtros_base_premios(page)
+    prize_date_filter = preparar_filtros_base_premios(
+        page,
+        es_reporte_diario=False,
+    )
     year_start = yesterday.replace(month=1, day=1)
     start_date_text = formatear_fecha_metabase(year_start)
     end_date_text = formatear_fecha_metabase(yesterday)
@@ -255,7 +283,10 @@ def configurar_y_descargar_premios_acumulados(page, yesterday: date) -> None:
 
 
 def configurar_y_descargar_premios_diarios(page, yesterday: date) -> None:
-    prize_date_filter = preparar_filtros_base_premios(page)
+    prize_date_filter = preparar_filtros_base_premios(
+        page,
+        es_reporte_diario=True,
+    )
 
     print(f"[INFO] Configurando premios diarios para: {yesterday:%Y-%m-%d}.")
     prize_date_filter.click(timeout=DASHBOARD_TIMEOUT_MS)

@@ -73,14 +73,13 @@ def obtener_ruta_reportes(local_file_path: str) -> str:
 def obtener_ruta_directorio_ventas(local_file_path: str) -> str:
     report_date = obtener_fecha_reporte(local_file_path)
     year = str(report_date.year)
-    month = MONTH_NAMES[report_date.month]
 
     sales_base_dir = os.getenv("SFTP_SALES_DIR", "/Sales").strip()
 
     if not sales_base_dir.startswith("/"):
         sales_base_dir = f"/{sales_base_dir}"
 
-    return f"{sales_base_dir}/{year}/{month}"
+    return f"{sales_base_dir}/{year}"
 
 
 def obtener_ruta_reporte_ventas(local_file_path: str) -> str:
