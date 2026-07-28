@@ -29,6 +29,11 @@ MONTH_NAMES = {
     12: "diciembre",
 }
 DASHBOARD_TIMEOUT_MS = 90000
+ELLIPSIS_MENU_PATH = (
+    "M4.5 8A1.25 1.25 0 1 1 2 8a1.25 1.25 0 0 1 2.5 0z"
+    "M9.25 8a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0z"
+    "M12.75 9.25a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"
+)
 
 
 def seleccionar_tipo_reporte(page, report_type: str) -> None:
@@ -118,7 +123,10 @@ def preparar_descarga_csv(
 
     if buscar_menu_descarga:
         download_deadline = time.monotonic() + (DASHBOARD_TIMEOUT_MS / 1000)
-        download_option = page.get_by_text("Descargar resultado").last
+        download_option = page.get_by_text(
+            "Descargar resultados",
+            exact=True,
+        ).last
         attempt = 0
 
         while time.monotonic() < download_deadline:
@@ -126,7 +134,7 @@ def preparar_descarga_csv(
             title.hover(timeout=10000)
             title_box = title.bounding_box()
             menu_buttons = page.locator(
-                'button:has(svg[aria-label="ellipsis icon"])'
+                f'button:has(path[d="{ELLIPSIS_MENU_PATH}"])'
             )
             menu_candidates = []
 
