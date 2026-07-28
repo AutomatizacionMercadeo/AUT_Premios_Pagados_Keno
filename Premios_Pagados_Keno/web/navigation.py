@@ -165,9 +165,21 @@ def preparar_descarga_csv(
                 menu_button = menu_buttons.nth(index)
 
                 try:
+                    title.hover(timeout=10000)
                     menu_button.click(timeout=5000)
                     download_option.wait_for(state="visible", timeout=2000)
                 except PlaywrightTimeoutError:
+                    visible_menu = page.locator('[role="menu"]:visible').last
+
+                    if visible_menu.count() > 0:
+                        try:
+                            menu_text = " | ".join(
+                                visible_menu.inner_text(timeout=1000).splitlines()
+                            )
+                            print(f"[INFO] Menu descartado: {menu_text}")
+                        except PlaywrightTimeoutError:
+                            pass
+
                     page.keyboard.press("Escape")
                     continue
 
