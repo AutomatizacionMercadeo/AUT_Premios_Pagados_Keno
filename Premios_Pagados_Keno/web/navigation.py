@@ -100,7 +100,11 @@ def formatear_fecha_metabase(report_date: date) -> str:
     return f"{report_date.day} de {month_name} de {report_date.year}"
 
 
-def preparar_descarga_csv(page, section_title: str) -> None:
+def preparar_descarga_csv(
+    page,
+    section_title: str,
+    usar_menu_de_seccion: bool = False,
+) -> None:
     print(f"[INFO] Buscando la seccion {section_title}.")
     title = page.locator(
         '[data-testid="legend-caption-title"]',
@@ -112,9 +116,19 @@ def preparar_descarga_csv(page, section_title: str) -> None:
     )
     title.wait_for(state="visible", timeout=10000)
 
-    ellipsis_button = page.locator(
-        'button:has(svg[aria-label="ellipsis icon"])'
-    ).last
+    if usar_menu_de_seccion:
+        section_card = title.locator(
+            "xpath=ancestor::*[.//button[.//svg[@aria-label='ellipsis icon']]][1]"
+        )
+        section_card.hover()
+        ellipsis_button = section_card.locator(
+            'button:has(svg[aria-label="ellipsis icon"])'
+        ).first
+    else:
+        ellipsis_button = page.locator(
+            'button:has(svg[aria-label="ellipsis icon"])'
+        ).last
+
     ellipsis_button.wait_for(state="visible", timeout=10000)
     ellipsis_button.click()
 
@@ -275,7 +289,11 @@ def configurar_y_descargar_premios_acumulados(page, yesterday: date) -> None:
     print("[INFO] Aplicando filtros de premios acumulados.")
     page.get_by_role("button", name="Aplicar").click()
     esperar_resultados(page)
-    preparar_descarga_csv(page, "Premios")
+    preparar_descarga_csv(
+        page,
+        "Premios",
+        usar_menu_de_seccion=True,
+    )
 
     try:
         print("[INFO] Descargando consolidado acumulado de premios.")
