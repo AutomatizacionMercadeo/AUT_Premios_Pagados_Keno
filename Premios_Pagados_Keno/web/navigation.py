@@ -131,6 +131,7 @@ def preparar_descarga_csv(
             or menu_button.count() != 1
             or menu_button.get_attribute("data-testid") != "dashcard-menu"
             or menu_button.get_attribute("aria-haspopup") != "menu"
+            or not menu_button.get_attribute("aria-controls")
         ):
             raise RuntimeError(
                 f"No se pudo validar el boton de descarga de {section_title}."
@@ -140,17 +141,26 @@ def preparar_descarga_csv(
             f"[INFO] Boton de menu validado dentro de la seccion {section_title}."
         )
         download_deadline = time.monotonic() + (DASHBOARD_TIMEOUT_MS / 1000)
-        download_option = page.get_by_text(
-            "Descargar resultados",
-            exact=True,
-        ).last
 
         while time.monotonic() < download_deadline:
             section_container.hover(timeout=10000)
             menu_button.wait_for(state="visible", timeout=10000)
+            menu_id = menu_button.get_attribute("aria-controls")
+
+            if not menu_id:
+                raise RuntimeError(
+                    f"El boton de {section_title} no indica el menu que controla."
+                )
+
             menu_button.click(timeout=10000)
+            dropdown = page.locator(f'[id="{menu_id}"]')
+            download_option = dropdown.get_by_text(
+                "Descargar resultados",
+                exact=True,
+            )
 
             try:
+                dropdown.wait_for(state="visible", timeout=3000)
                 download_option.wait_for(state="visible", timeout=3000)
             except PlaywrightTimeoutError:
                 page.keyboard.press("Escape")
@@ -160,6 +170,15 @@ def preparar_descarga_csv(
                 )
                 time.sleep(5)
                 continue
+
+            if (
+                menu_button.get_attribute("aria-expanded") != "true"
+                or dropdown.count() != 1
+                or download_option.count() != 1
+            ):
+                raise RuntimeError(
+                    f"No se pudo validar el menu abierto de {section_title}."
+                )
 
             print(f"[INFO] Menu de descarga encontrado para {section_title}.")
             download_option.click()
