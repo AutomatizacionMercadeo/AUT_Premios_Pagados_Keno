@@ -191,7 +191,11 @@ def configurar_y_descargar_ventas(page) -> None:
     volver_al_inicio(page)
 
 
-def preparar_filtros_base_premios(page, es_reporte_diario: bool):
+def preparar_filtros_base_premios(
+    page,
+    es_reporte_diario: bool,
+    date_filter_name: str = "Fecha Pago de Premio",
+):
     seleccionar_tipo_reporte(page, "Premio")
     revertir_filtros_si_es_necesario(page, "premios")
     limpiar_filtros(page)
@@ -199,7 +203,7 @@ def preparar_filtros_base_premios(page, es_reporte_diario: bool):
     print("[INFO] Aplicando filtro de premio.")
     aplicar_limpieza_filtros(page, "premios")
 
-    prize_date_filter = page.get_by_text("Fecha Pago de Premio", exact=True)
+    prize_date_filter = page.get_by_text(date_filter_name, exact=True)
     prize_date_filter.wait_for(
         state="visible",
         timeout=DASHBOARD_TIMEOUT_MS,
@@ -247,13 +251,14 @@ def configurar_y_descargar_premios_acumulados(page, yesterday: date) -> None:
     prize_date_filter = preparar_filtros_base_premios(
         page,
         es_reporte_diario=False,
+        date_filter_name="Fecha de Venta",
     )
     year_start = yesterday.replace(month=1, day=1)
     start_date_text = formatear_fecha_metabase(year_start)
     end_date_text = formatear_fecha_metabase(yesterday)
 
     print(
-        "[INFO] Configurando fecha de pago de premios: "
+        "[INFO] Configurando Fecha de Venta para premios acumulados: "
         f"{year_start:%Y-%m-%d} hasta {yesterday:%Y-%m-%d}."
     )
     prize_date_filter.click(timeout=DASHBOARD_TIMEOUT_MS)
