@@ -103,7 +103,7 @@ def formatear_fecha_metabase(report_date: date) -> str:
 def preparar_descarga_csv(
     page,
     section_title: str,
-    usar_menu_de_seccion: bool = False,
+    buscar_menu_descarga: bool = False,
 ) -> None:
     print(f"[INFO] Buscando la seccion {section_title}.")
     title = page.locator(
@@ -116,26 +116,72 @@ def preparar_descarga_csv(
     )
     title.wait_for(state="visible", timeout=10000)
 
-    if usar_menu_de_seccion:
-        section_card = title.locator(
-            "xpath=ancestor::*[.//button[.//*[local-name()='svg' "
-            "and @aria-label='ellipsis icon']]][1]"
-        )
-        section_card.wait_for(state="visible", timeout=10000)
-        section_card.hover()
-        ellipsis_button = section_card.locator(
+    if buscar_menu_descarga:
+        title_box = title.bounding_box()
+        menu_buttons = page.locator(
             'button:has(svg[aria-label="ellipsis icon"])'
-        ).first
+        )
+        menu_candidates = []
+
+        if title_box is None:
+            raise RuntimeError(
+                f"No se pudo determinar la posicion de la seccion {section_title}."
+            )
+
+        title_center_x = title_box["x"] + (title_box["width"] / 2)
+        title_center_y = title_box["y"] + (title_box["height"] / 2)
+
+        for index in range(menu_buttons.count()):
+            menu_button = menu_buttons.nth(index)
+
+            if not menu_button.is_visible():
+                continue
+
+            button_box = menu_button.bounding_box()
+
+            if button_box is None:
+                continue
+
+            button_center_x = button_box["x"] + (button_box["width"] / 2)
+            button_center_y = button_box["y"] + (button_box["height"] / 2)
+            distance = (
+                (button_center_x - title_center_x) ** 2
+                + (button_center_y - title_center_y) ** 2
+            )
+            menu_candidates.append((distance, index))
+
+        print(
+            f"[INFO] Evaluando {len(menu_candidates)} menus visibles "
+            f"cerca de la seccion {section_title}."
+        )
+        download_option = page.get_by_text("Descargar resultado").last
+
+        for _, index in sorted(menu_candidates):
+            menu_button = menu_buttons.nth(index)
+
+            try:
+                menu_button.click(timeout=5000)
+                download_option.wait_for(state="visible", timeout=2000)
+            except PlaywrightTimeoutError:
+                page.keyboard.press("Escape")
+                continue
+
+            print(f"[INFO] Menu de descarga encontrado para {section_title}.")
+            download_option.click()
+            break
+        else:
+            raise RuntimeError(
+                f"No se encontro el menu de descarga de la seccion {section_title}."
+            )
     else:
         ellipsis_button = page.locator(
             'button:has(svg[aria-label="ellipsis icon"])'
         ).last
+        ellipsis_button.wait_for(state="visible", timeout=10000)
+        ellipsis_button.click()
 
-    ellipsis_button.wait_for(state="visible", timeout=10000)
-    ellipsis_button.click()
-
-    time.sleep(3)
-    page.get_by_text("Descargar resultado").click()
+        time.sleep(3)
+        page.get_by_text("Descargar resultado").click()
 
     time.sleep(3)
     page.get_by_text(".csv").click()
@@ -294,7 +340,7 @@ def configurar_y_descargar_premios_acumulados(page, yesterday: date) -> None:
     preparar_descarga_csv(
         page,
         "Premios",
-        usar_menu_de_seccion=True,
+        buscar_menu_descarga=True,
     )
 
     try:
