@@ -118,8 +118,10 @@ def preparar_descarga_csv(
 
     if usar_menu_de_seccion:
         section_card = title.locator(
-            "xpath=ancestor::*[.//button[.//svg[@aria-label='ellipsis icon']]][1]"
+            "xpath=ancestor::*[.//button[.//*[local-name()='svg' "
+            "and @aria-label='ellipsis icon']]][1]"
         )
+        section_card.wait_for(state="visible", timeout=10000)
         section_card.hover()
         ellipsis_button = section_card.locator(
             'button:has(svg[aria-label="ellipsis icon"])'
