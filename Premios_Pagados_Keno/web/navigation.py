@@ -117,61 +117,76 @@ def preparar_descarga_csv(
     title.wait_for(state="visible", timeout=10000)
 
     if buscar_menu_descarga:
-        title_box = title.bounding_box()
-        menu_buttons = page.locator(
-            'button:has(svg[aria-label="ellipsis icon"])'
-        )
-        menu_candidates = []
-
-        if title_box is None:
-            raise RuntimeError(
-                f"No se pudo determinar la posicion de la seccion {section_title}."
-            )
-
-        title_center_x = title_box["x"] + (title_box["width"] / 2)
-        title_center_y = title_box["y"] + (title_box["height"] / 2)
-
-        for index in range(menu_buttons.count()):
-            menu_button = menu_buttons.nth(index)
-
-            if not menu_button.is_visible():
-                continue
-
-            button_box = menu_button.bounding_box()
-
-            if button_box is None:
-                continue
-
-            button_center_x = button_box["x"] + (button_box["width"] / 2)
-            button_center_y = button_box["y"] + (button_box["height"] / 2)
-            distance = (
-                (button_center_x - title_center_x) ** 2
-                + (button_center_y - title_center_y) ** 2
-            )
-            menu_candidates.append((distance, index))
-
-        print(
-            f"[INFO] Evaluando {len(menu_candidates)} menus visibles "
-            f"cerca de la seccion {section_title}."
-        )
+        download_deadline = time.monotonic() + (DASHBOARD_TIMEOUT_MS / 1000)
         download_option = page.get_by_text("Descargar resultado").last
+        attempt = 0
 
-        for _, index in sorted(menu_candidates):
-            menu_button = menu_buttons.nth(index)
+        while time.monotonic() < download_deadline:
+            attempt += 1
+            title.hover(timeout=10000)
+            title_box = title.bounding_box()
+            menu_buttons = page.locator(
+                'button:has(svg[aria-label="ellipsis icon"])'
+            )
+            menu_candidates = []
 
-            try:
-                menu_button.click(timeout=5000)
-                download_option.wait_for(state="visible", timeout=2000)
-            except PlaywrightTimeoutError:
-                page.keyboard.press("Escape")
+            if title_box is None:
+                time.sleep(3)
                 continue
 
-            print(f"[INFO] Menu de descarga encontrado para {section_title}.")
-            download_option.click()
+            title_center_x = title_box["x"] + (title_box["width"] / 2)
+            title_center_y = title_box["y"] + (title_box["height"] / 2)
+
+            for index in range(menu_buttons.count()):
+                menu_button = menu_buttons.nth(index)
+
+                if not menu_button.is_visible():
+                    continue
+
+                button_box = menu_button.bounding_box()
+
+                if button_box is None:
+                    continue
+
+                button_center_x = button_box["x"] + (button_box["width"] / 2)
+                button_center_y = button_box["y"] + (button_box["height"] / 2)
+                distance = (
+                    (button_center_x - title_center_x) ** 2
+                    + (button_center_y - title_center_y) ** 2
+                )
+                menu_candidates.append((distance, index))
+
+            print(
+                f"[INFO] Intento {attempt}: evaluando {len(menu_candidates)} "
+                f"menus visibles cerca de la seccion {section_title}."
+            )
+
+            for _, index in sorted(menu_candidates):
+                menu_button = menu_buttons.nth(index)
+
+                try:
+                    menu_button.click(timeout=5000)
+                    download_option.wait_for(state="visible", timeout=2000)
+                except PlaywrightTimeoutError:
+                    page.keyboard.press("Escape")
+                    continue
+
+                print(f"[INFO] Menu de descarga encontrado para {section_title}.")
+                download_option.click()
+                break
+            else:
+                print(
+                    f"[INFO] Los resultados de {section_title} aun no permiten "
+                    "la descarga. Reintentando."
+                )
+                time.sleep(5)
+                continue
+
             break
         else:
             raise RuntimeError(
-                f"No se encontro el menu de descarga de la seccion {section_title}."
+                f"No se encontro el menu de descarga de la seccion {section_title} "
+                f"despues de {DASHBOARD_TIMEOUT_MS // 1000} segundos."
             )
     else:
         ellipsis_button = page.locator(
