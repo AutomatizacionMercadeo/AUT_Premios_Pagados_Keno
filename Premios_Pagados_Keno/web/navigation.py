@@ -271,7 +271,7 @@ def configurar_y_descargar_ventas(page) -> None:
 def preparar_filtros_base_premios(
     page,
     es_reporte_diario: bool,
-    date_filter_name: str = "Fecha Pago de Premio",
+    date_filter_name: str | None = "Fecha Pago de Premio",
 ):
     seleccionar_tipo_reporte(page, "Premio")
     revertir_filtros_si_es_necesario(page, "premios")
@@ -280,11 +280,14 @@ def preparar_filtros_base_premios(
     print("[INFO] Aplicando filtro de premio.")
     aplicar_limpieza_filtros(page, "premios")
 
-    prize_date_filter = page.get_by_text(date_filter_name, exact=True)
-    prize_date_filter.wait_for(
-        state="visible",
-        timeout=DASHBOARD_TIMEOUT_MS,
-    )
+    prize_date_filter = None
+
+    if date_filter_name is not None:
+        prize_date_filter = page.get_by_text(date_filter_name, exact=True)
+        prize_date_filter.wait_for(
+            state="visible",
+            timeout=DASHBOARD_TIMEOUT_MS,
+        )
 
     if es_reporte_diario:
         print("[INFO] Filtrando transacciones finalizadas.")
@@ -292,64 +295,109 @@ def preparar_filtros_base_premios(
         page.get_by_text("Finalizado").click()
         page.get_by_text("Restablecer al valor predeterminado").click()
     else:
-        print("[INFO] Filtrando transacciones finalizadas para el consolidado anual.")
+        print("[INFO] Seleccionando todos los estados para el consolidado anual.")
         time.sleep(2)
-        page.get_by_role(
-            "button",
-            name="Estado Transaccion",
-            exact=True,
-        ).click(timeout=DASHBOARD_TIMEOUT_MS)
-        finalized_checkbox = page.locator(
-            'input[data-testid="Finalizado-filter-value"]'
+        state_filter_buttons = page.locator(
+            'button[data-testid="parameter-value-widget-target"]'
+            '[aria-label="Estado Transaccion"]:visible'
         )
-        finalized_checkbox.wait_for(
+        state_filter_buttons.first.wait_for(
             state="visible",
             timeout=DASHBOARD_TIMEOUT_MS,
         )
-        finalized_checkbox.check(timeout=DASHBOARD_TIMEOUT_MS)
-        state_filter_dialog = finalized_checkbox.locator(
-            "xpath=ancestor::*[@role='dialog'][1]"
-        )
-        state_filter_dialog.get_by_text(
-            "Restablecer al valor predeterminado",
-            exact=True,
-        ).click(timeout=DASHBOARD_TIMEOUT_MS)
-        state_filter_dialog.wait_for(
-            state="hidden",
-            timeout=DASHBOARD_TIMEOUT_MS,
-        )
-        print("[INFO] Esperando que se registre el filtro de estado.")
-        time.sleep(2)
+
+        if state_filter_buttons.count() != 1:
+            raise RuntimeError(
+                "No se pudo validar el boton de Estado Transaccion."
+            )
+
+        state_filter_button = state_filter_buttons.first
+
+        while True:
+            selection_status = state_filter_button.get_by_text(
+                "2 selecciones",
+                exact=True,
+            )
+
+            if selection_status.count() == 1 and selection_status.is_visible():
+                print("[INFO] Estado Transaccion confirmado con 2 selecciones.")
+                break
+
+            try:
+                dialog_id = state_filter_button.get_attribute("aria-controls")
+
+                if not dialog_id:
+                    raise RuntimeError(
+                        "Estado Transaccion no indica el dialogo que controla."
+                    )
+
+                state_filter_button.click(timeout=10000)
+                state_filter_dialog = page.locator(f'[id="{dialog_id}"]')
+                state_filter_dialog.wait_for(state="visible", timeout=10000)
+
+                select_all_labels = state_filter_dialog.locator(
+                    'label[for]:visible'
+                ).filter(has_text=re.compile(r"^\s*Seleccionar todo\s*$"))
+                select_all_labels.first.wait_for(state="visible", timeout=10000)
+
+                if select_all_labels.count() != 1:
+                    raise RuntimeError(
+                        "No se pudo validar la etiqueta Seleccionar todo."
+                    )
+
+                checkbox_id = select_all_labels.first.get_attribute("for")
+
+                if not checkbox_id:
+                    raise RuntimeError(
+                        "Seleccionar todo no esta asociado a una casilla."
+                    )
+
+                select_all_checkbox = state_filter_dialog.locator(
+                    f'input[type="checkbox"][id="{checkbox_id}"]'
+                )
+
+                if select_all_checkbox.count() != 1:
+                    raise RuntimeError(
+                        "No se encontro la casilla de Seleccionar todo."
+                    )
+
+                select_all_checkbox.check(timeout=10000)
+
+                if not select_all_checkbox.is_checked():
+                    raise RuntimeError(
+                        "La casilla Seleccionar todo no quedo marcada."
+                    )
+
+                update_filter_button = state_filter_dialog.get_by_role(
+                    "button",
+                    name="Actualizar filtro",
+                    exact=True,
+                )
+                update_filter_button.click(timeout=10000)
+                state_filter_dialog.wait_for(state="hidden", timeout=10000)
+                selection_status.wait_for(state="visible", timeout=10000)
+            except (PlaywrightTimeoutError, RuntimeError) as error:
+                print(
+                    "[WARN] No se confirmaron las 2 selecciones de "
+                    f"Estado Transaccion: {error}. Reintentando."
+                )
+                page.keyboard.press("Escape")
+                time.sleep(3)
+                continue
+
+            print("[INFO] Estado Transaccion confirmado con 2 selecciones.")
+            break
 
     return prize_date_filter
 
 
 def configurar_y_descargar_premios_acumulados(page, yesterday: date) -> None:
-    prize_date_filter = preparar_filtros_base_premios(
+    preparar_filtros_base_premios(
         page,
         es_reporte_diario=False,
-        date_filter_name="Fecha de Venta",
+        date_filter_name=None,
     )
-    year_start = yesterday.replace(month=1, day=1)
-    start_date_text = formatear_fecha_metabase(year_start)
-    end_date_text = formatear_fecha_metabase(yesterday)
-
-    print(
-        "[INFO] Configurando Fecha de Venta para premios acumulados: "
-        f"{year_start:%Y-%m-%d} hasta {yesterday:%Y-%m-%d}."
-    )
-    prize_date_filter.click(timeout=DASHBOARD_TIMEOUT_MS)
-    page.get_by_role(
-        "button",
-        name=re.compile(r"Rango de fechas fijo"),
-    ).click()
-    page.get_by_label("Fecha de inicio").click()
-    page.get_by_label("Fecha de inicio").fill(start_date_text)
-    page.get_by_label("Fecha de fin").click()
-    page.get_by_label("Fecha de fin").fill(end_date_text)
-    page.get_by_role("button", name="Añadir filtro").click()
-
-    print("[INFO] Aplicando filtros de premios acumulados.")
+    print("[INFO] Aplicando todos los estados de transaccion.")
     page.get_by_role("button", name="Aplicar").click()
     esperar_resultados(page)
     preparar_descarga_csv(
