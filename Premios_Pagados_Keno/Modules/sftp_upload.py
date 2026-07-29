@@ -22,6 +22,9 @@ MONTH_NAMES = {
 LEGACY_ACCUMULATED_PATTERNS = {
     "ventas_acumuladas.csv": re.compile(r"^\d{4}-\d{2}-01_\d{4}-\d{2}-\d{2}\.csv$"),
     "premios_acumulados.csv": re.compile(r"^\d{4}-\d{2}-\d{2}_acumulado\.csv$"),
+    "equipos_acumulados.csv": re.compile(
+        r"^\d{4}-\d{2}-\d{2}(?:_equipos|_acumulado)?\.csv$"
+    ),
 }
 
 def asegurar_directorio_sftp(sftp, remote_dir: str) -> None:
@@ -102,6 +105,19 @@ def obtener_ruta_reporte_premios(local_file_path: str) -> str:
     return f"{obtener_ruta_directorio_premios(local_file_path)}/premios_acumulados.csv"
 
 
+def obtener_ruta_directorio_equipos() -> str:
+    teams_base_dir = os.getenv("SFTP_TEAMS_DIR", "/Teams").strip()
+
+    if not teams_base_dir.startswith("/"):
+        teams_base_dir = f"/{teams_base_dir}"
+
+    return teams_base_dir
+
+
+def obtener_ruta_reporte_equipos(local_file_path: str) -> str:
+    return f"{obtener_ruta_directorio_equipos()}/equipos_acumulados.csv"
+
+
 def subir_archivo_sftp(local_file_path: str, remote_file_path: str) -> None:
     host = os.getenv("SFTP_HOST")
     port = int(os.getenv("SFTP_PORT", "22"))
@@ -144,6 +160,11 @@ def subir_reporte_ventas(local_file_path: str) -> None:
 
 def subir_reporte_premios(local_file_path: str) -> None:
     remote_file_path = obtener_ruta_reporte_premios(local_file_path)
+    subir_archivo_sftp(local_file_path, remote_file_path)
+
+
+def subir_reporte_equipos(local_file_path: str) -> None:
+    remote_file_path = obtener_ruta_reporte_equipos(local_file_path)
     subir_archivo_sftp(local_file_path, remote_file_path)
 
 

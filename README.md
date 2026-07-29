@@ -163,6 +163,7 @@ SFTP_PASSWORD=password-sftp
 SFTP_BASE_DIR=/Paid_Prizes
 SFTP_SALES_DIR=/Sales
 SFTP_PRIZES_DIR=/Prizes
+SFTP_TEAMS_DIR=/Teams
 ```
 
 Notas:
@@ -172,6 +173,7 @@ Notas:
 - `SFTP_BASE_DIR` define la carpeta raiz remota donde se suben los reportes.
 - `SFTP_SALES_DIR` define la carpeta raiz remota de ventas. Si no se configura, usa `/Sales`.
 - `SFTP_PRIZES_DIR` define la carpeta raiz de premios acumulados. Si no se configura, usa `/Prizes`.
+- `SFTP_TEAMS_DIR` define la carpeta raiz de equipos. Si no se configura, usa `/Teams`.
 - No subir el archivo `.env` al repositorio.
 
 ## Ejecucion
@@ -326,6 +328,21 @@ Ejemplo:
 /Sales/2026/ventas_acumuladas.csv
 ```
 
+Para el consolidado de equipos verifica y crea:
+
+```text
+/Teams/equipos_acumulados.csv
+```
+
+Ejemplo:
+
+```text
+/Teams/equipos_acumulados.csv
+```
+
+Este flujo no crea subcarpetas dentro de `Teams`. En cada ejecucion, el nuevo
+consolidado reemplaza el archivo anterior directamente en esa carpeta.
+
 Los consolidados conservan nombres con fechas mientras se encuentran en la
 carpeta local, pero se cargan al SFTP con nombres remotos fijos. Por eso, cada
 nueva ejecucion sobrescribe el acumulado anterior de su carpeta de destino y no
@@ -335,7 +352,8 @@ anterior con fechas en el nombre. Esta limpieza no afecta los reportes diarios
 de `Paid_Prizes` ni archivos con otros nombres.
 
 El periodo de los destinos se obtiene del nombre del reporte: `Sales` y
-`Prizes` usan el anio, mientras que `Paid_Prizes` usa el anio y el mes.
+`Prizes` usan el anio, mientras que `Paid_Prizes` usa el anio y el mes. `Teams`
+no crea subcarpetas por periodo.
 
 Esto evita errores en cambios de mes o anio. Por ejemplo, si el programa se ejecuta el `2027-01-01` y el archivo generado es:
 

@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 from Modules.reports_folder import clear_reports_folder, download_report
 from Modules.sftp_upload import (
+    subir_reporte_equipos,
     subir_reporte_premio_pagado,
     subir_reporte_premios,
     subir_reporte_ventas,
@@ -452,6 +453,26 @@ def configurar_y_descargar_premios(page) -> None:
     configurar_y_descargar_premios_diarios(page, yesterday)
 
 
+def configurar_y_descargar_equipos(page) -> None:
+    yesterday = date.today() - timedelta(days=1)
+
+    seleccionar_tipo_reporte(page, "Equipos")
+    preparar_descarga_csv(
+        page,
+        "Equipos",
+        buscar_menu_descarga=True,
+    )
+
+    try:
+        print("[INFO] Descargando consolidado acumulado de equipos.")
+        teams_file_name = f"{yesterday:%Y-%m-%d}_equipos.csv"
+        download_path = download_report(page, file_name=teams_file_name)
+        print("[INFO] Subiendo consolidado de equipos al SFTP.")
+        subir_reporte_equipos(download_path)
+    except PlaywrightTimeoutError:
+        print("[ERROR] No se pudo descargar el consolidado de equipos.")
+
+
 def navigation():
     print("[INFO] Iniciando procesamiento.")
     headless = os.getenv("HEADLESS", "false").lower() == "true"
@@ -484,6 +505,11 @@ def navigation():
 
         print("[INFO] Iniciando flujo de premios.")
         configurar_y_descargar_premios(page)
+
+        volver_al_inicio(page)
+
+        print("[INFO] Iniciando flujo de equipos.")
+        configurar_y_descargar_equipos(page)
     except Exception as error:
         print(f"[ERROR] Ocurrio un error: {error}")
         raise
