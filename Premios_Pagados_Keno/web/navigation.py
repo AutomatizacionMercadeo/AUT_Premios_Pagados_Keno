@@ -2,6 +2,7 @@ import os
 import re
 import time
 from datetime import date, timedelta
+from Modules.credentials import cargar_credenciales
 
 from Modules.reports_folder import clear_reports_folder, download_report
 from Modules.sftp_upload import (
@@ -284,7 +285,8 @@ def preparar_filtros_base_premios(
     prize_date_filter = None
 
     if date_filter_name is not None:
-        prize_date_filter = page.get_by_text(date_filter_name, exact=True)
+        # El tooltip repite el texto del filtro; seleccionar el boton lo excluye.
+        prize_date_filter = page.get_by_role("button", name=date_filter_name, exact=True)
         prize_date_filter.wait_for(
             state="visible",
             timeout=DASHBOARD_TIMEOUT_MS,
@@ -415,6 +417,7 @@ def configurar_y_descargar_premios_acumulados(page, yesterday: date) -> None:
         subir_reporte_premios(download_path)
     except PlaywrightTimeoutError:
         print("[ERROR] No se pudo descargar el acumulado de premios.")
+        raise
 
 
 def configurar_y_descargar_premios_diarios(page, yesterday: date) -> None:
@@ -439,6 +442,7 @@ def configurar_y_descargar_premios_diarios(page, yesterday: date) -> None:
         subir_reporte_premio_pagado(download_path)
     except PlaywrightTimeoutError:
         print("[ERROR] No se pudo descargar el reporte diario de premios.")
+        raise
 
 
 def configurar_y_descargar_premios(page) -> None:
@@ -471,10 +475,13 @@ def configurar_y_descargar_equipos(page) -> None:
         subir_reporte_equipos(download_path)
     except PlaywrightTimeoutError:
         print("[ERROR] No se pudo descargar el consolidado de equipos.")
+        raise
 
 
 def navigation():
     print("[INFO] Iniciando procesamiento.")
+    print("[INFO] Obteniendo credenciales web y SFTP desde SQL Server.")
+    cargar_credenciales()
     web_username = os.getenv("WEB_USERNAME", "")
     web_password = os.getenv("WEB_PASSWORD", "")
     print("[INFO] Limpiando carpeta de reportes.")
@@ -494,8 +501,11 @@ def navigation():
         time.sleep(3)
 
         print("[INFO] Abriendo dashboard Region 3.")
-        page.locator("div", has_text=re.compile(r"^Region\s*3$")).first.click()
-        page.get_by_text("Keno Ventas y Premios - Region 3").click()
+        page.goto(
+            os.environ["DASHBOARD_URL"],
+            wait_until="domcontentloaded",
+            timeout=DASHBOARD_TIMEOUT_MS,
+        )
 
         time.sleep(3)
 

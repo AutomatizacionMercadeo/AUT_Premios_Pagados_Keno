@@ -14,7 +14,7 @@ def open_login_page(manager: BrowserManager):
     web_url = os.getenv("WEB_URL")
 
     if not web_url:
-        raise RuntimeError("No se encontro WEB_URL en el archivo .env")
+        raise RuntimeError("No se cargo WEB_URL desde sp_getData '31'.")
 
     while True:
         page = manager.open()

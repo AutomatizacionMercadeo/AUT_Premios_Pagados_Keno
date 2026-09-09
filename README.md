@@ -2,11 +2,11 @@
 
 Automatizacion en Python para consultar en Metabase el reporte de premios pagados de Keno, descargar el resultado en formato CSV y subirlo a un servidor SFTP organizado por anio y mes.
 
-El flujo usa Playwright para navegar la interfaz web, Paramiko para la conexion SFTP y variables de entorno para credenciales y configuracion.
+El flujo usa Playwright para navegar la interfaz web, Paramiko para la conexion SFTP y SQL Server para obtener las credenciales.
 
 ## Flujo General
 
-1. Carga variables desde `Premios_Pagados_Keno/.env`.
+1. Carga la conexion SQL desde `Premios_Pagados_Keno/.env` y consulta `sp_getData '31'` y `sp_getData '29'` antes de cada ejecucion, incluido el reprocesamiento.
 2. Limpia la carpeta local de reportes antes de ejecutar.
 3. Inicia Chromium con Playwright e inicia sesion en Metabase.
 4. Navega al dashboard `Keno Ventas y Premios - Region 3`.
@@ -108,12 +108,40 @@ Gestiona la carpeta local de reportes:
 
 Gestiona la conexion SFTP:
 
-- Lee credenciales desde `.env`.
+- Usa las credenciales obtenidas de `sp_getData '29'` al iniciar el flujo.
 - Construye la ruta remota usando la fecha del nombre del archivo.
 - Crea carpetas remotas si no existen.
 - Sube el archivo CSV.
 
-## Requisitos
+## Notificacion por correo
+
+Al terminar todas las descargas y subidas al SFTP, `main.py` llama a
+`EnvioCorreo.enviar(destinatarios)`, definido en `Modules/envio_correo.py`.
+Configura la lista `destinatarios` en `main.py`, justo antes de la llamada.
+Los errores de descarga impiden enviar una notificacion de exito.
+Si falla la notificacion, se informa por consola y la ejecucion termina con error;
+los reportes ya subidos permanecen en el SFTP.
+
+Instala las dependencias de `requirements.txt` (incluye `pyodbc`) y un driver
+ODBC 18 o 17 para SQL Server. El correo usa las mismas variables SQL del flujo:
+
+```env
+SERVER=servidor
+DATABASE=base
+USR=usuario
+PASS=clave
+```
+
+La cuenta SQL necesita permiso para ejecutar `sp_getData`. Se ejecuta con el
+parametro `'1'` para leer `server_smtp` y `port_smtp`, y con `'2'` para leer
+`user_smtp` y `pass_smtp`. El usuario SMTP se usa tambien como remitente.
+El puerto 465 utiliza TLS directo; los demas puertos requieren STARTTLS.
+
+La imagen de firma se obtiene de `Premios_Pagados_Keno/Modules/Assets/Firma.jpg`.
+Se incorpora al HTML como imagen en linea mediante CID. Si falta, el correo
+usa una firma de texto y muestra un aviso en consola.
+
+## Requisitos de instalacion
 
 - Python 3.10 o superior.
 - Acceso a Metabase.
@@ -126,6 +154,7 @@ Dependencias:
 playwright
 python-dotenv
 paramiko
+pyodbc
 ```
 
 ## Instalacion
@@ -151,27 +180,46 @@ Premios_Pagados_Keno/.env
 Variables requeridas:
 
 ```env
-WEB_URL=https://url-de-metabase
-WEB_USERNAME=usuario
-WEB_PASSWORD=password
-
-SFTP_HOST=host-sftp
-SFTP_PORT=22
-SFTP_USERNAME=usuario-sftp
-SFTP_PASSWORD=password-sftp
-SFTP_BASE_DIR=/Paid_Prizes
-SFTP_SALES_DIR=/Sales
-SFTP_PRIZES_DIR=/Prizes
-SFTP_TEAMS_DIR=/Teams
+SERVER=servidor-sql
+DATABASE=base-de-datos
+USR=usuario-sql
+PASS=clave-sql
 ```
+
+La conexion usa cifrado y acepta el certificado del servidor sin validarlo. Se selecciona
+ODBC Driver 18 si esta instalado; de lo contrario, ODBC Driver 17.
+No se requiere `SQL_CONNECTION_STRING`.
+
+Se configuran `Encrypt=yes` y `TrustServerCertificate=yes` para todas las
+conexiones SQL, incluida la consulta de credenciales del correo. Esto permite
+usar el certificado sin comprobar su cadena de confianza ni la identidad del
+servidor. No requiere variables adicionales en `.env`.
+
+`Modules/credentials.py` ejecuta consultas parametrizadas equivalentes a
+`EXEC sp_getData '31'` y `EXEC sp_getData '29'` y aplica este mapeo:
+
+| Opcion | Variable | Columna |
+| --- | --- | --- |
+| 31 | WEB_URL | tenant_id |
+| 31 | WEB_USERNAME | server_smtp |
+| 31 | WEB_PASSWORD | port_smtp |
+| 31 | DASHBOARD_URL | tenant_id + secret_id |
+| 29 | SFTP_HOST | tenant_id |
+| 29 | SFTP_PORT | port_smtp |
+| 29 | SFTP_USERNAME | user_sig |
+| 29 | SFTP_PASSWORD | pass_sig |
+
+La concatenacion del dashboard es literal: los valores SQL deben incluir los
+separadores necesarios. Despues del login se abre esa URL directamente.
+Las credenciales se conservan solo en el entorno del proceso; no se escriben
+en `.env`. Los valores anteriores WEB/SFTP se reemplazan con los de SQL.
+Si faltan datos o el puerto SFTP es invalido, el flujo se detiene antes de
+limpiar reportes o abrir el navegador.
 
 Notas:
 
 - El navegador siempre se ejecuta en modo visible (`headless=False` en el codigo).
-- `SFTP_BASE_DIR` define la carpeta raiz remota donde se suben los reportes.
-- `SFTP_SALES_DIR` define la carpeta raiz remota de ventas. Si no se configura, usa `/Sales`.
-- `SFTP_PRIZES_DIR` define la carpeta raiz de premios acumulados. Si no se configura, usa `/Prizes`.
-- `SFTP_TEAMS_DIR` define la carpeta raiz de equipos. Si no se configura, usa `/Teams`.
+- Las rutas remotas se definen en `Modules/sftp_upload.py`: `/Paid_Prizes`, `/Sales`, `/Prizes` y `/Teams`.
 - No subir el archivo `.env` al repositorio.
 
 ## Ejecucion

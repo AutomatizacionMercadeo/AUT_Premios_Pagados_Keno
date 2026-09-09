@@ -111,7 +111,7 @@ def subir_archivo_sftp(local_file_path: str, remote_file_path: str) -> None:
     password = os.getenv("SFTP_PASSWORD")
 
     if not all([host, username, password]):
-        raise RuntimeError("Faltan credenciales SFTP en el archivo .env")
+        raise RuntimeError("No se cargaron las credenciales SFTP desde sp_getData '29'.")
 
     remote_dir = str(Path(remote_file_path).parent).replace("\\", "/")
 
