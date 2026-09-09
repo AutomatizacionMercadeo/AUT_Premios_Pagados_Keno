@@ -4,6 +4,12 @@ from datetime import datetime
 from pathlib import Path
 
 
+SFTP_BASE_DIR = "/Paid_Prizes"
+SFTP_SALES_DIR = "/Sales"
+SFTP_PRIZES_DIR = "/Prizes"
+SFTP_TEAMS_DIR = "/Teams"
+
+
 MONTH_NAMES = {
     1: "Enero",
     2: "Febrero",
@@ -65,24 +71,14 @@ def obtener_ruta_reportes(local_file_path: str) -> str:
     year = str(report_date.year)
     month = MONTH_NAMES[report_date.month]
 
-    base_dir = os.getenv("SFTP_BASE_DIR", "/Paid_Prizes").strip()
-
-    if not base_dir.startswith("/"):
-        base_dir = f"/{base_dir}"
-
-    return f"{base_dir}/{year}/{month}/{file_path.name}"
+    return f"{SFTP_BASE_DIR}/{year}/{month}/{file_path.name}"
 
 
 def obtener_ruta_directorio_ventas(local_file_path: str) -> str:
     report_date = obtener_fecha_reporte(local_file_path)
     year = str(report_date.year)
 
-    sales_base_dir = os.getenv("SFTP_SALES_DIR", "/Sales").strip()
-
-    if not sales_base_dir.startswith("/"):
-        sales_base_dir = f"/{sales_base_dir}"
-
-    return f"{sales_base_dir}/{year}"
+    return f"{SFTP_SALES_DIR}/{year}"
 
 
 def obtener_ruta_reporte_ventas(local_file_path: str) -> str:
@@ -93,12 +89,7 @@ def obtener_ruta_directorio_premios(local_file_path: str) -> str:
     report_date = obtener_fecha_reporte(local_file_path)
     year = str(report_date.year)
 
-    prizes_base_dir = os.getenv("SFTP_PRIZES_DIR", "/Prizes").strip()
-
-    if not prizes_base_dir.startswith("/"):
-        prizes_base_dir = f"/{prizes_base_dir}"
-
-    return f"{prizes_base_dir}/{year}"
+    return f"{SFTP_PRIZES_DIR}/{year}"
 
 
 def obtener_ruta_reporte_premios(local_file_path: str) -> str:
@@ -106,12 +97,7 @@ def obtener_ruta_reporte_premios(local_file_path: str) -> str:
 
 
 def obtener_ruta_directorio_equipos() -> str:
-    teams_base_dir = os.getenv("SFTP_TEAMS_DIR", "/Teams").strip()
-
-    if not teams_base_dir.startswith("/"):
-        teams_base_dir = f"/{teams_base_dir}"
-
-    return teams_base_dir
+    return SFTP_TEAMS_DIR
 
 
 def obtener_ruta_reporte_equipos(local_file_path: str) -> str:

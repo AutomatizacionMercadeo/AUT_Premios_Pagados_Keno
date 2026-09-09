@@ -154,7 +154,6 @@ Variables requeridas:
 WEB_URL=https://url-de-metabase
 WEB_USERNAME=usuario
 WEB_PASSWORD=password
-HEADLESS=false
 
 SFTP_HOST=host-sftp
 SFTP_PORT=22
@@ -168,8 +167,7 @@ SFTP_TEAMS_DIR=/Teams
 
 Notas:
 
-- `HEADLESS=false` permite ver el navegador durante la ejecucion.
-- `HEADLESS=true` ejecuta el navegador en segundo plano.
+- El navegador siempre se ejecuta en modo visible (`headless=False` en el codigo).
 - `SFTP_BASE_DIR` define la carpeta raiz remota donde se suben los reportes.
 - `SFTP_SALES_DIR` define la carpeta raiz remota de ventas. Si no se configura, usa `/Sales`.
 - `SFTP_PRIZES_DIR` define la carpeta raiz de premios acumulados. Si no se configura, usa `/Prizes`.
@@ -430,16 +428,4 @@ Validar sintaxis:
 
 ```powershell
 python -m py_compile main.py web\navigation.py web\browser.py web\open_login_page.py Modules\date_input.py Modules\reports_folder.py Modules\sftp_upload.py
-```
-
-Ejecutar en modo visible:
-
-```env
-HEADLESS=false
-```
-
-Ejecutar en modo oculto:
-
-```env
-HEADLESS=true
 ```

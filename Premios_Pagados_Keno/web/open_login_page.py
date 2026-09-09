@@ -2,6 +2,7 @@ import os
 import time
 
 from web.browser import BrowserManager
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
@@ -40,6 +41,19 @@ def open_login_page(manager: BrowserManager):
             print(
                 "[WARN] Metabase no estuvo disponible despues de "
                 f"{PAGE_READY_TIMEOUT_SECONDS} segundos. Reintentando..."
+            )
+            manager.close()
+            time.sleep(RETRY_DELAY_SECONDS)
+        except PlaywrightError as error:
+            # page.goto tambien puede fallar con errores de red que no son
+            # TimeoutError, por ejemplo ERR_CONNECTION_TIMED_OUT o
+            # ERR_NAME_NOT_RESOLVED. Esos fallos son transitorios y deben
+            # seguir la misma politica de reintento.
+            error_detail = str(error).splitlines()[0]
+            print(
+                "[WARN] No fue posible conectarse a Metabase "
+                f"({error_detail}). Verifique la red/VPN y la URL. "
+                "Reintentando..."
             )
             manager.close()
             time.sleep(RETRY_DELAY_SECONDS)

@@ -475,12 +475,11 @@ def configurar_y_descargar_equipos(page) -> None:
 
 def navigation():
     print("[INFO] Iniciando procesamiento.")
-    headless = os.getenv("HEADLESS", "false").lower() == "true"
     web_username = os.getenv("WEB_USERNAME", "")
     web_password = os.getenv("WEB_PASSWORD", "")
     print("[INFO] Limpiando carpeta de reportes.")
     clear_reports_folder()
-    manager = BrowserManager(headless=headless)
+    manager = BrowserManager(headless=False)
 
     try:
         print("[INFO] Abriendo Metabase.")
