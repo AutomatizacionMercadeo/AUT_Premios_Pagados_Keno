@@ -116,7 +116,23 @@ Gestiona la conexion SFTP:
 ## Notificacion por correo
 
 Al terminar todas las descargas y subidas al SFTP, `main.py` llama a
-`EnvioCorreo.enviar(destinatarios)`, definido en `Modules/envio_correo.py`.
+`EnvioCorreo.enviar_si_corresponde(destinatarios, fecha_ejecucion)`, definido en
+`Modules/envio_correo.py`. Solo se envia el correo si la ejecucion comenzo el
+dia 1 del mes, segun la fecha local del equipo. El asunto y el cuerpo informan
+que se proceso el mes anterior, incluyendo su nombre y anio. Por ejemplo,
+el 1 de enero de 2027 se notifica diciembre de 2026.
+
+Los envios exitosos se registran por mes en `Premios_Pagados_Keno/.estado_correo/`
+para evitar repetir el correo en ejecuciones posteriores del mismo dia en este
+equipo. No se registra un envio fallido, por lo que puede reintentarse el dia 1.
+El registro se conserva fuera de la carpeta de reportes que limpia el flujo.
+No deben ejecutarse instancias simultaneas: la comprobacion y el envio no son
+una operacion atomica. Si SMTP acepta el correo pero se interrumpe el proceso
+antes de guardar el registro, un reintento puede repetir la notificacion.
+Si no hay una ejecucion exitosa el dia 1, no se envia un aviso diferido los dias
+siguientes. Este cambio no programa ejecuciones ni modifica las consultas o
+subidas al SFTP.
+
 Configura la lista `destinatarios` en `main.py`, justo antes de la llamada.
 Los errores de descarga impiden enviar una notificacion de exito.
 Si falla la notificacion, se informa por consola y la ejecucion termina con error;
